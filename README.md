@@ -37,9 +37,9 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 
 ## 📦 Installation
 
-1. Copy this repository into `config/custom_components/kidpoints/`.
+1. Copy this repository into `config/custom_components/simplechores/`.
 2. Restart Home Assistant.
-3. Go to **Settings → Devices & Services → Add Integration → KidPoints**.
+3. Go to **Settings → Devices & Services → Add Integration → simplechores**.
 4. Follow the config flow to:
    - Add children’s names.
    - Pick whether to use Local To-do lists.
@@ -63,32 +63,32 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 
 ## 🛠️ Services
 
-All services are under the `kidpoints` domain:
+All services are under the `simplechores` domain:
 
-- `kidpoints.add_points`
+- `simplechores.add_points`
   - `kid`: child name/id  
   - `amount`: integer  
   - `reason` (optional)
 
-- `kidpoints.remove_points`
+- `simplechores.remove_points`
   - Same fields as `add_points`.
 
-- `kidpoints.create_adhoc_chore`
+- `simplechores.create_adhoc_chore`
   - `kid`: child  
   - `title`: string  
   - `points`: integer  
   - `due`: datetime (optional)
 
-- `kidpoints.complete_chore`
+- `simplechores.complete_chore`
   - `kid`: child  
   - `chore_id`: To-do item ID
 
-- `kidpoints.claim_reward`
+- `simplechores.claim_reward`
   - `kid`: child  
   - `reward_id`: defined in config  
   - Deducts cost, logs event, and (optionally) creates a calendar entry.
 
-- `kidpoints.log_parent_chore`
+- `simplechores.log_parent_chore`
   - `title`: string  
   - `start`, `end`: datetime  
   - `all_day`: bool
@@ -101,7 +101,7 @@ Two supported patterns:
 
 ### A. Schedule → To-do
 Use HA’s **Schedule helper**.  
-Example: “Every day 7–8 PM” triggers a KidPoints automation to add chores.
+Example: “Every day 7–8 PM” triggers a simplechores automation to add chores.
 
 ### B. Calendar → To-do
 Maintain a Local or Google calendar with recurring events (RRULE). Integration syncs each event to a To-do item. Kids check it off when done, and points are awarded.

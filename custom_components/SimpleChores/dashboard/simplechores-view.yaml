@@ -1,1 +1,42 @@
 # SimpleChores Dashboard View
+
+title: SimpleChores
+path: simplechores
+icon: mdi:star-circle
+type: sections
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: Kids' points
+      - type: tile
+        entity: number.alex_points
+        name: Alex
+      - type: tile
+        entity: number.emma_points
+        name: Emma
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Chore lists
+      - type: todo-list
+        entity: todo.alex_chores
+      - type: todo-list
+        entity: todo.emma_chores
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Quick actions
+      - type: entity
+        entity: script.simplechores_claim_reward  # from blueprint after you create a script instance
+        name: Claim reward (script)
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Parents' calendar
+      - type: calendar
+        entities:
+          - calendar.parents

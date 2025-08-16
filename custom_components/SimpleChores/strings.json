@@ -1,5 +1,19 @@
 {
+  "title": "SimpleChores",
   "config": {
-    "title": "SimpleChores"
+    "step": {
+      "user": {
+        "title": "SimpleChores setup",
+        "description": "Add kids and options",
+        "data": {
+          "kids": "Kid IDs (comma-separated)",
+          "use_todo": "Create To-do lists per kid",
+          "parents_calendar": "Parents calendar entity_id"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one SimpleChores instance is allowed"
+    }
   }
 }

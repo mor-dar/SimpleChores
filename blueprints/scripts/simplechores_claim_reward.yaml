@@ -1,1 +1,36 @@
 # SimpleChores Claim Reward Script Blueprint
+blueprint:
+  name: SimpleChores – Claim reward
+  description: Deduct points and create a calendar event for the reward.
+  domain: script
+  input:
+    kid:
+      selector: { text: {} }
+    title:
+      selector: { text: {} }
+    cost:
+      selector: { number: { min: 1, step: 1 } }
+    calendar_service:
+      name: Calendar service (optional)
+      default: ""
+      selector:
+        select:
+          options:
+            - ""
+            - "google.create_event"
+            - "local_calendar.create_event"
+
+sequence:
+  - service: simplechores.claim_reward
+    data:
+      kid: !input kid
+      title: !input title
+      cost: !input cost
+  - choose:
+      - conditions: "{{ (calendar_service | default('')) != '' }}"
+        sequence:
+          - service: "{{ calendar_service }}"
+            data:
+              summary: "Family reward — {{ title }} ({{ kid }})"
+              start_date: "{{ now().date() }}"
+              end_date: "{{ now().date() }}"

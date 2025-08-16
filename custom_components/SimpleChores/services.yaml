@@ -1,1 +1,64 @@
 # Services for SimpleChores integration
+add_points:
+  name: Add points
+  fields:
+    kid:
+      description: Kid ID
+      example: alex
+    amount:
+      description: Amount to add
+      example: 5
+    reason:
+      description: Reason (shown in ledger)
+      example: Good behavior
+
+remove_points:
+  name: Remove points
+  fields:
+    kid:
+      description: Kid ID
+    amount:
+      description: Amount to remove
+    reason:
+      description: Reason
+
+create_adhoc_chore:
+  name: Create ad-hoc chore
+  fields:
+    kid:
+      description: Kid ID
+    title:
+      description: Chore title
+    points:
+      description: Points awarded on completion
+    due:
+      description: ISO datetime (optional)
+
+complete_chore:
+  name: Complete chore (award points)
+  fields:
+    kid:
+      description: Kid ID
+    points:
+      description: Points to award
+    reason:
+      description: Reason (optional)
+
+claim_reward:
+  name: Claim reward (deduct points)
+  fields:
+    kid:
+      description: Kid ID
+    title:
+      description: Reward title
+    cost:
+      description: Points to deduct
+
+log_parent_chore:
+  name: Log parent chore to calendar
+  fields:
+    service:
+      description: calendar service e.g. google.create_event
+      example: google.create_event
+    data:
+      description: Service data payload for event creation

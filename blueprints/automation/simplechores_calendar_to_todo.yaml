@@ -1,1 +1,26 @@
 # SimpleChores Calendar to Todo Automation Blueprint
+blueprint:
+  name: SimpleChores – Calendar → To-do
+  description: Mirror calendar events (including RRULE) into a To-do list at event start.
+  domain: automation
+  input:
+    calendar_entity:
+      name: Chores calendar
+      selector: { entity: { domain: calendar } }
+    kid_todo:
+      name: Kid To-do entity
+      selector: { entity: { domain: todo } }
+
+trigger:
+  - platform: calendar
+    entity_id: !input calendar_entity
+    event: start
+
+action:
+  - variables:
+      summary: "{{ trigger.calendar_event.summary }}"
+  - service: todo.add_item
+    data:
+      entity_id: !input kid_todo
+      item:
+        summary: "{{ summary }}"
