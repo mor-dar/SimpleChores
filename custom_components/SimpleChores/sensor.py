@@ -25,7 +25,12 @@ class SimpleChoresWeekSensor(SensorEntity):
     def native_value(self):
         # simple derived value from ledger
         model = self._coord.model
-        if not model:
+        if not model or not model.ledger:
             return 0
         monday = (datetime.now() - timedelta(days=datetime.now().weekday())).timestamp()
         return sum(e.delta for e in model.ledger if e.kid_id == self._kid_id and e.ts >= monday)
+    
+    @property
+    def available(self) -> bool:
+        """Check if coordinator is ready."""
+        return self._coord.model is not None

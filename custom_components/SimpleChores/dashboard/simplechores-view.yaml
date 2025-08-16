@@ -57,35 +57,30 @@ sections:
       - type: entity
         entity: text.simplechores_chore_kid_input
         name: Kid
-      - type: button
+      - type: entity
         entity: button.simplechores_create_chore_button
         name: Create Chore
-        tap_action:
-          action: call-service
-          service: button.press
-          target:
-            entity_id: button.simplechores_create_chore_button
 
   - type: grid
     cards:
       - type: heading
         heading: Rewards
-      - type: button
+      - type: entity
         entity: button.simplechores_reward_movie_night_alex
         name: Movie Night (Alex)
-      - type: button
+      - type: entity
         entity: button.simplechores_reward_movie_night_emma
         name: Movie Night (Emma)
-      - type: button
+      - type: entity
         entity: button.simplechores_reward_ice_cream_alex
         name: Ice Cream (Alex)
-      - type: button
+      - type: entity
         entity: button.simplechores_reward_ice_cream_emma
         name: Ice Cream (Emma)
-      - type: button
+      - type: entity
         entity: button.simplechores_reward_trip_park_alex
         name: Park Trip (Alex)
-      - type: button
+      - type: entity
         entity: button.simplechores_reward_trip_park_emma
         name: Park Trip (Emma)
 

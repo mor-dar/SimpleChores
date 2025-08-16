@@ -6,7 +6,7 @@ CONF_KIDS = "kids"
 CONF_USE_TODO = "use_todo"
 CONF_PARENTS_CALENDAR = "parents_calendar"
 
-STORAGE_VERSION = 1
+STORAGE_VERSION = 2
 STORAGE_KEY = f"{DOMAIN}_ledger"
 
 # Services

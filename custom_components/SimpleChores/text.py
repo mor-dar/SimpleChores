@@ -31,6 +31,10 @@ class SimpleChoresChoreTitle(TextEntity):
         self._attr_name = "Chore Title"
         self._attr_native_value = ""
 
+    @property
+    def native_value(self) -> str:
+        return self._attr_native_value
+
     async def async_set_value(self, value: str) -> None:
         self._attr_native_value = value
         self.async_write_ha_state()
@@ -45,6 +49,10 @@ class SimpleChoresChorePoints(TextEntity):
         self._attr_name = "Chore Points"
         self._attr_native_value = "5"
 
+    @property
+    def native_value(self) -> str:
+        return self._attr_native_value
+
     async def async_set_value(self, value: str) -> None:
         self._attr_native_value = value
         self.async_write_ha_state()
@@ -58,6 +66,10 @@ class SimpleChoresChoreKid(TextEntity):
         self._attr_unique_id = f"{DOMAIN}_chore_kid_input"
         self._attr_name = "Kid"
         self._attr_native_value = kids[0] if kids else "alex"
+
+    @property
+    def native_value(self) -> str:
+        return self._attr_native_value
 
     async def async_set_value(self, value: str) -> None:
         if value in self._kids:

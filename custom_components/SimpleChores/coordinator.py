@@ -2,7 +2,7 @@
 from __future__ import annotations
 from datetime import datetime
 import uuid
-from typing import Dict, List
+from typing import List
 from homeassistant.core import HomeAssistant
 from .storage import SimpleChoresStore
 from .models import StorageModel, LedgerEntry, Kid, Reward, PendingChore

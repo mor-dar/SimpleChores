@@ -23,15 +23,19 @@ trigger:
 action:
   - variables:
       summary: "{{ trigger.calendar_event.summary }}"
+      default_points: !input default_points
       # Try to extract points from event title like "Clean room (10 pts)"
       points: >-
         {% if "(" in summary and "pt" in summary %}
-          {% set pts_match = summary | regex_findall_index('\((\d+)\s*pts?\)', 0) %}
-          {{ pts_match | int if pts_match else default_points }}
+          {% set pts_text = summary.split("(")[1].split("pt")[0].strip() %}
+          {% if pts_text.isdigit() %}
+            {{ pts_text | int }}
+          {% else %}
+            {{ default_points }}
+          {% endif %}
         {% else %}
           {{ default_points }}
         {% endif %}
-      default_points: !input default_points
       clean_title: >-
         {% if "(" in summary and "pt" in summary %}
           {{ summary.split("(")[0].strip() }}

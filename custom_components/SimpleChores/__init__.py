@@ -98,21 +98,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Create calendar event if enabled
             if reward.create_calendar_event:
                 parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
-                from datetime import datetime, timedelta
                 start_time = datetime.now()
                 end_time = start_time + timedelta(hours=reward.calendar_duration_hours)
                 
-                await hass.services.async_call(
-                    "calendar", "create_event",
-                    {
-                        "entity_id": parents_calendar,
-                        "summary": f"Family reward — {reward.title} ({kid.capitalize()})",
-                        "description": reward.description,
-                        "start_date_time": start_time.isoformat(),
-                        "end_date_time": end_time.isoformat(),
-                    },
-                    blocking=False
-                )
+                try:
+                    await hass.services.async_call(
+                        "calendar", "create_event",
+                        {
+                            "entity_id": parents_calendar,
+                            "summary": f"Family reward — {reward.title} ({kid.capitalize()})",
+                            "description": reward.description,
+                            "start_date_time": start_time.isoformat(),
+                            "end_date_time": end_time.isoformat(),
+                        },
+                        blocking=False
+                    )
+                except Exception:
+                    # Calendar service failed, but still deduct points
+                    pass
         else:
             # Legacy direct cost/title method
             cost = int(data.get("cost", 0))
@@ -123,18 +126,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = call.data
         parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
         
-        await hass.services.async_call(
-            "calendar", "create_event",
-            {
-                "entity_id": parents_calendar,
-                "summary": data["title"],
-                "description": data.get("description", ""),
-                "start_date_time": data.get("start", datetime.now().isoformat()),
-                "end_date_time": data.get("end", (datetime.now() + timedelta(hours=1)).isoformat()),
-                "all_day": data.get("all_day", False),
-            },
-            blocking=False
-        )
+        try:
+            await hass.services.async_call(
+                "calendar", "create_event",
+                {
+                    "entity_id": parents_calendar,
+                    "summary": data["title"],
+                    "description": data.get("description", ""),
+                    "start_date_time": data.get("start", datetime.now().isoformat()),
+                    "end_date_time": data.get("end", (datetime.now() + timedelta(hours=1)).isoformat()),
+                    "all_day": data.get("all_day", False),
+                },
+                blocking=False
+            )
+        except Exception:
+            # Calendar service failed - log error but don't fail
+            pass
 
     # Service schemas
     add_points_schema = vol.Schema({
