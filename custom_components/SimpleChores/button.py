@@ -92,7 +92,9 @@ class SimpleChoresRewardButton(ButtonEntity):
 
     @property
     def available(self) -> bool:
-        """Check if reward is available and kid has enough points."""
+        """Check if reward button should be available."""
+        if self._coord.model is None:
+            return False
         reward = self._coord.get_reward(self._reward_id)
         if not reward:
             return False

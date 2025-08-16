@@ -1,4 +1,5 @@
-# SimpleChores Dashboard View
+# SimpleChores Dashboard View - Basic Working Version
+# Replace entity IDs with your actual entities from Settings > Entities
 
 title: SimpleChores
 path: simplechores
@@ -9,97 +10,59 @@ sections:
     cards:
       - type: heading
         heading: Kids' Points
-      - type: tile
-        entity: number.simplechores_alex_points
-        name: Alex
-        features:
-          - type: number-buttons
-            step: 1
-      - type: tile
-        entity: number.simplechores_emma_points
-        name: Emma
-        features:
-          - type: number-buttons
-            step: 1
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Weekly Progress
-      - type: tile
-        entity: sensor.simplechores_alex_points_week
-        name: Alex This Week
-      - type: tile
-        entity: sensor.simplechores_emma_points_week
-        name: Emma This Week
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Total Points Earned
-      - type: tile
-        entity: sensor.simplechores_alex_points_total
-        name: Alex Total
-      - type: tile
-        entity: sensor.simplechores_emma_points_total
-        name: Emma Total
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Chore Lists
-      - type: todo-list
-        entity: todo.simplechores_todo_alex
-        title: Alex's Chores
-      - type: todo-list
-        entity: todo.simplechores_todo_emma
-        title: Emma's Chores
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Create New Chore
-      - type: entity
-        entity: text.simplechores_chore_title_input
-        name: Chore Title
-      - type: entity
-        entity: text.simplechores_chore_points_input
-        name: Points
-      - type: entity
-        entity: text.simplechores_chore_kid_input
-        name: Kid
-      - type: entity
-        entity: button.simplechores_create_chore_button
-        name: Create Chore
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Rewards
-      - type: entity
-        entity: button.simplechores_reward_movie_night_alex
-        name: Movie Night (Alex)
-      - type: entity
-        entity: button.simplechores_reward_movie_night_emma
-        name: Movie Night (Emma)
-      - type: entity
-        entity: button.simplechores_reward_ice_cream_alex
-        name: Ice Cream (Alex)
-      - type: entity
-        entity: button.simplechores_reward_ice_cream_emma
-        name: Ice Cream (Emma)
-      - type: entity
-        entity: button.simplechores_reward_trip_park_alex
-        name: Park Trip (Alex)
-      - type: entity
-        entity: button.simplechores_reward_trip_park_emma
-        name: Park Trip (Emma)
-
-  - type: grid
-    cards:
-      - type: heading
-        heading: Parents' Calendar
-      - type: calendar
+        heading_type: title
+      - type: entities
         entities:
-          - calendar.parents
-        title: Family Schedule
+          # Replace these with your actual number entities
+          # Look for entities starting with "number." in your entity list
+          - entity: number.noam_points
+            name: Noam Points
+          - entity: number.lior_points  
+            name: Lior Points
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Services (Use Developer Tools)
+        heading_type: title
+      - type: markdown
+        content: |
+          **Add Points:**
+          ```yaml
+          service: simplechores.add_points
+          data:
+            kid: noam
+            amount: 5
+            reason: Good behavior
+          ```
+          
+          **Create Chore:**
+          ```yaml
+          service: simplechores.create_adhoc_chore
+          data:
+            kid: noam
+            title: Clean room
+            points: 10
+          ```
+          
+          **Claim Reward:**
+          ```yaml
+          service: simplechores.claim_reward
+          data:
+            kid: noam
+            reward_id: movie_night
+          ```
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Todo Lists (if enabled)
+        heading_type: title
+      - type: entities
+        entities:
+          # Replace these with your actual todo entities
+          # Look for entities starting with "todo." in your entity list
+          - entity: todo.noam_chores
+            name: Noam's Chores
+          - entity: todo.lior_chores
+            name: Lior's Chores

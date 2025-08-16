@@ -27,10 +27,18 @@ class SimpleChoresNumber(NumberEntity):
         self._kid_id = kid_id
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points"
         self._attr_name = f"{kid_id.capitalize()} Points"
+        # Store reference in coordinator for updates
+        if not hasattr(coord, '_entities'):
+            coord._entities = {}
+        coord._entities[kid_id] = self
 
     @property
     def native_value(self) -> float | None:
-        return float(self._coord.get_points(self._kid_id))
+        points = self._coord.get_points(self._kid_id)
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.debug(f"SimpleChores: Number entity {self._kid_id} reporting {points} points")
+        return float(points)
 
     async def async_set_native_value(self, value: float) -> None:
         current = self._coord.get_points(self._kid_id)
@@ -41,3 +49,10 @@ class SimpleChoresNumber(NumberEntity):
             else:
                 await self._coord.remove_points(self._kid_id, -delta, "Manual adjust", "adjust")
         self.async_write_ha_state()
+        # Update all number entities for this kid
+        self.async_schedule_update_ha_state(force_refresh=True)
+    
+    async def async_update(self) -> None:
+        """Called by Home Assistant to update the entity."""
+        # Force refresh from coordinator
+        pass  # native_value property will fetch fresh data

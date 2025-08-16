@@ -30,7 +30,7 @@ class SimpleChoresChoreTitle(TextEntity):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_chore_title_input"
         self._attr_name = "Chore Title"
-        self._attr_native_value = ""
+        self._attr_native_value = "Enter chore name"
 
     @property
     def native_value(self) -> str:
@@ -68,7 +68,7 @@ class SimpleChoresChoreKid(TextEntity):
         self._kids = kids
         self._attr_unique_id = f"{DOMAIN}_chore_kid_input"
         self._attr_name = "Kid"
-        self._attr_native_value = kids[0] if kids else "alex"
+        self._attr_native_value = kids[0] if kids else "noam"
 
     @property
     def native_value(self) -> str:

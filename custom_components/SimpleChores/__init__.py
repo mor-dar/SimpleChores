@@ -22,9 +22,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # ---- Services ----
     async def _add_points(call: ServiceCall):
-        data = call.data
-        await coordinator.ensure_kid(data["kid"])
-        await coordinator.add_points(data["kid"], int(data["amount"]), data.get("reason","adjust"), "adjust")
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        try:
+            _LOGGER.debug("SimpleChores: add_points service called")
+            data = call.data
+            _LOGGER.debug(f"SimpleChores: service data = {data}")
+            
+            kid = data["kid"]
+            amount = int(data["amount"])
+            reason = data.get("reason", "adjust")
+            
+            _LOGGER.debug(f"SimpleChores: Adding {amount} points to {kid}, reason: {reason}")
+            _LOGGER.debug(f"SimpleChores: coordinator = {coordinator}")
+            _LOGGER.debug(f"SimpleChores: coordinator.model = {coordinator.model}")
+            
+            await coordinator.ensure_kid(kid)
+            _LOGGER.debug("SimpleChores: ensure_kid completed")
+            
+            old_points = coordinator.get_points(kid)
+            _LOGGER.debug(f"SimpleChores: old_points = {old_points}")
+            
+            await coordinator.add_points(kid, amount, reason, "adjust")
+            _LOGGER.debug("SimpleChores: add_points completed")
+            
+            new_points = coordinator.get_points(kid)
+            _LOGGER.debug(f"SimpleChores: new_points = {new_points}")
+            
+        except Exception as e:
+            _LOGGER.error(f"SimpleChores: add_points service error: {e}")
+            _LOGGER.error(f"SimpleChores: error type: {type(e)}")
+            import traceback
+            _LOGGER.error(f"SimpleChores: traceback: {traceback.format_exc()}")
+            raise
 
     async def _remove_points(call: ServiceCall):
         data = call.data
@@ -43,18 +74,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Create todo item with points in summary for easy identification
         title_with_points = f"{title} (+{points})"
-        await hass.services.async_call(
-            "todo", "add_item",
-            {
-                "entity_id": f"todo.{kid}_chores", 
-                "item": {
-                    "summary": title_with_points,
-                    "due_datetime": data.get("due"),
-                    "uid": todo_uid
-                }
-            },
-            blocking=False,
-        )
+        try:
+            await hass.services.async_call(
+                "todo", "add_item",
+                {
+                    "entity_id": f"todo.{kid}_chores", 
+                    "item": title_with_points
+                },
+                blocking=False,
+            )
+        except Exception as e:
+            # If todo service fails, still track the chore
+            pass
 
     async def _complete_chore(call: ServiceCall):
         data = call.data

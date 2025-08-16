@@ -30,7 +30,11 @@ class SimpleChoresCoordinator:
             await self.async_save()
 
     def get_points(self, kid_id: str) -> int:
-        return self.model.kids.get(kid_id, Kid(id=kid_id, name=kid_id)).points
+        if not self.model:
+            return 0
+        if kid_id not in self.model.kids:
+            return 0
+        return self.model.kids[kid_id].points
 
     async def add_points(self, kid_id: str, amount: int, reason: str, kind: str = "earn"):
         assert self.model
@@ -41,6 +45,8 @@ class SimpleChoresCoordinator:
             LedgerEntry(ts=datetime.now().timestamp(), kid_id=kid_id, delta=amount, reason=reason, kind=kind)
         )
         await self.async_save()
+        # Trigger entity updates
+        await self._update_entities(kid_id)
 
     async def remove_points(self, kid_id: str, amount: int, reason: str, kind: str = "spend"):
         await self.add_points(kid_id, -abs(amount), reason, kind)
@@ -97,3 +103,39 @@ class SimpleChoresCoordinator:
 
     def get_pending_chore(self, todo_uid: str) -> PendingChore | None:
         return self.model.pending_chores.get(todo_uid)
+    
+    async def _update_entities(self, kid_id: str):
+        """Trigger entity updates after point changes"""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        _LOGGER.debug(f"SimpleChores: Triggering entity updates for {kid_id}")
+        
+        # Direct entity state update - most reliable method
+        entity = None
+        if hasattr(self, '_entities'):
+            # Try exact match first
+            if kid_id in self._entities:
+                entity = self._entities[kid_id]
+            else:
+                # Try case-insensitive match
+                for registered_kid, registered_entity in self._entities.items():
+                    if registered_kid.lower() == kid_id.lower():
+                        entity = registered_entity
+                        break
+        
+        if entity:
+            entity.async_write_ha_state()
+            _LOGGER.debug(f"SimpleChores: Updated entity state for {kid_id}")
+        else:
+            if hasattr(self, '_entities'):
+                _LOGGER.warning(f"SimpleChores: No entity found for {kid_id}. Available: {list(self._entities.keys())}")
+            else:
+                _LOGGER.warning(f"SimpleChores: No entities registered yet")
+            
+        # Fallback: trigger entity update via service
+        entity_id = f"number.{kid_id}_points"
+        try:
+            await self.hass.services.async_call("homeassistant", "update_entity", {"entity_id": entity_id}, blocking=False)
+        except Exception as e:
+            _LOGGER.debug(f"SimpleChores: Fallback update failed: {e}")
