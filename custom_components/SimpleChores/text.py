@@ -24,6 +24,7 @@ class SimpleChoresChoreTitle(TextEntity):
     _attr_icon = "mdi:text"
     _attr_native_min = 1
     _attr_native_max = 100
+    _attr_mode = "text"
 
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
@@ -42,6 +43,7 @@ class SimpleChoresChoreTitle(TextEntity):
 class SimpleChoresChorePoints(TextEntity):
     _attr_icon = "mdi:star-circle"
     _attr_pattern = r"^\d+$"
+    _attr_mode = "text"
 
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
@@ -59,6 +61,7 @@ class SimpleChoresChorePoints(TextEntity):
 
 class SimpleChoresChoreKid(TextEntity):
     _attr_icon = "mdi:account-child"
+    _attr_mode = "text"
 
     def __init__(self, coord: SimpleChoresCoordinator, kids: list[str]):
         self._coord = coord

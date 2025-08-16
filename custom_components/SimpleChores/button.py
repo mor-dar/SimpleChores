@@ -33,10 +33,30 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
         self._attr_name = "Create Chore"
 
     async def async_press(self) -> None:
-        # Get values from input helpers
-        title_entity = self._hass.states.get(f"text.simplechores_chore_title_input")
-        points_entity = self._hass.states.get(f"text.simplechores_chore_points_input") 
-        kid_entity = self._hass.states.get(f"text.simplechores_chore_kid_input")
+        # Get values from input helpers - use entity registry for proper entity IDs
+        from homeassistant.helpers import entity_registry as er
+        
+        er_registry = er.async_get(self._hass)
+        
+        # Find the text input entities
+        title_entity_id = None
+        points_entity_id = None
+        kid_entity_id = None
+        
+        for entry in er_registry.entities.values():
+            if entry.unique_id == f"{DOMAIN}_chore_title_input":
+                title_entity_id = entry.entity_id
+            elif entry.unique_id == f"{DOMAIN}_chore_points_input":
+                points_entity_id = entry.entity_id  
+            elif entry.unique_id == f"{DOMAIN}_chore_kid_input":
+                kid_entity_id = entry.entity_id
+        
+        if not all([title_entity_id, points_entity_id, kid_entity_id]):
+            return
+            
+        title_entity = self._hass.states.get(title_entity_id)
+        points_entity = self._hass.states.get(points_entity_id)
+        kid_entity = self._hass.states.get(kid_entity_id)
         
         if not all([title_entity, points_entity, kid_entity]):
             return

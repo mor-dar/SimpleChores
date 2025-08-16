@@ -26,8 +26,6 @@ class SimpleChoresWeekSensor(SensorEntity):
         self._kid_id = kid_id
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points_week"
         self._attr_name = f"{kid_id.capitalize()} Points (This Week)"
-        # Set entity_id to match README examples
-        self.entity_id = f"sensor.{kid_id}_points_week"
 
     @property
     def native_value(self):
@@ -50,8 +48,6 @@ class SimpleChoresTotalSensor(SensorEntity):
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points_total"
         self._attr_name = f"{kid_id.capitalize()} Points (Total Earned)"
         self._attr_icon = "mdi:star-circle-outline"
-        # Set entity_id to match README examples
-        self.entity_id = f"sensor.{kid_id}_points_total"
 
     @property
     def native_value(self):

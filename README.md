@@ -10,7 +10,7 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 ## ✨ Features
 
 - **Per-kid points balance**  
-  Each child has a `number` entity (`number.alex_points`, `number.emma_points`) with easy add/remove buttons.
+  Each child has a `number` entity (`number.simplechores_alex_points`, `number.simplechores_emma_points`) with easy add/remove buttons.
 
 - **Chores → Points**  
   - Recurring chores (daily/weekly) using HA **Schedules** or **Calendars**.  
@@ -50,14 +50,14 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 ## ⚙️ Entities
 
 ### Numbers
-- `number.<kid>_points` – current points balance per child.
+- `number.simplechores_<kid>_points` – current points balance per child.
 
 ### To-do lists (optional)
-- `todo.<kid>_chores` – if enabled, integration exposes a To-do list entity per child.
+- `todo.simplechores_todo_<kid>` – if enabled, integration exposes a To-do list entity per child.
 
 ### Sensors
-- `sensor.<kid>_points_week` – points earned this week
-- `sensor.<kid>_points_total` – total points earned all-time
+- `sensor.simplechores_<kid>_points_week` – points earned this week
+- `sensor.simplechores_<kid>_points_total` – total points earned all-time
 
 ### Dashboard Helpers
 - `text.simplechores_chore_title_input` – chore title input

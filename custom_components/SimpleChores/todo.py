@@ -23,8 +23,6 @@ class KidTodoList(TodoListEntity):
         self._items: List[TodoItem] = []
         self._attr_name = f"{kid_id.capitalize()} Chores"
         self._attr_unique_id = f"simplechores_todo_{kid_id}"
-        # Set entity_id to match README examples
-        self.entity_id = f"todo.{kid_id}_chores"
 
     async def async_get_items(self):
         return self._items

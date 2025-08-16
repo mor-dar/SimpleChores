@@ -9,6 +9,10 @@ import homeassistant.helpers.config_validation as cv
 from .const import DOMAIN, PLATFORMS, SERVICE_ADD_POINTS, SERVICE_REMOVE_POINTS, SERVICE_CREATE_ADHOC, SERVICE_COMPLETE_CHORE, SERVICE_CLAIM_REWARD, SERVICE_LOG_PARENT_CHORE
 from .coordinator import SimpleChoresCoordinator
 
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Set up the SimpleChores component."""
+    return True
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SimpleChoresCoordinator(hass)
     await coordinator.async_init()
