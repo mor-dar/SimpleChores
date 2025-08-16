@@ -1,15 +1,19 @@
 # SimpleChores Calendar to Todo Automation Blueprint
 blueprint:
   name: SimpleChores – Calendar → To-do
-  description: Mirror calendar events (including RRULE) into a To-do list at event start.
+  description: Mirror calendar events into chores using SimpleChores integration.
   domain: automation
   input:
     calendar_entity:
       name: Chores calendar
       selector: { entity: { domain: calendar } }
-    kid_todo:
-      name: Kid To-do entity
-      selector: { entity: { domain: todo } }
+    kid:
+      name: Kid ID
+      selector: { text: {} }
+    default_points:
+      name: Default points per chore
+      default: 5
+      selector: { number: { min: 1, max: 50, step: 1 } }
 
 trigger:
   - platform: calendar
@@ -19,8 +23,23 @@ trigger:
 action:
   - variables:
       summary: "{{ trigger.calendar_event.summary }}"
-  - service: todo.add_item
+      # Try to extract points from event title like "Clean room (10 pts)"
+      points: >-
+        {% if "(" in summary and "pt" in summary %}
+          {% set pts_match = summary | regex_findall_index('\((\d+)\s*pts?\)', 0) %}
+          {{ pts_match | int if pts_match else default_points }}
+        {% else %}
+          {{ default_points }}
+        {% endif %}
+      default_points: !input default_points
+      clean_title: >-
+        {% if "(" in summary and "pt" in summary %}
+          {{ summary.split("(")[0].strip() }}
+        {% else %}
+          {{ summary }}
+        {% endif %}
+  - service: simplechores.create_adhoc_chore
     data:
-      entity_id: !input kid_todo
-      item:
-        summary: "{{ summary }}"
+      kid: !input kid
+      title: "{{ clean_title }}"
+      points: "{{ points }}"

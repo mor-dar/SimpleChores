@@ -1,20 +1,20 @@
 # SimpleChores Schedule to Todo Automation Blueprint
 blueprint:
   name: SimpleChores – Schedule → To-do
-  description: Create chores when a Schedule helper turns on.
+  description: Create chores when a Schedule helper turns on using SimpleChores integration.
   domain: automation
   input:
     schedule_entity:
       name: Schedule
       selector: { entity: { domain: schedule } }
-    kid_todo:
-      name: Kid To-do entity
-      selector: { entity: { domain: todo } }
+    kid:
+      name: Kid ID
+      selector: { text: {} }
     chores:
-      name: Chores (list of {summary, points})
+      name: Chores (list of {title, points})
       default:
-        - { summary: "Tidy room (+5)", points: 5 }
-        - { summary: "Set table (+2)", points: 2 }
+        - { title: "Tidy room", points: 5 }
+        - { title: "Set table", points: 2 }
 
 trigger:
   - platform: state
@@ -26,8 +26,8 @@ action:
   - repeat:
       for_each: !input chores
       sequence:
-        - service: todo.add_item
+        - service: simplechores.create_adhoc_chore
           data:
-            entity_id: !input kid_todo
-            item:
-              summary: "{{ repeat.item.summary }}"
+            kid: !input kid
+            title: "{{ repeat.item.title }}"
+            points: "{{ repeat.item.points }}"

@@ -1,6 +1,6 @@
 """Constants for the SimpleChores integration."""
 DOMAIN = "simplechores"
-PLATFORMS = ["number", "todo", "sensor"]
+PLATFORMS = ["number", "todo", "sensor", "text", "button"]
 
 CONF_KIDS = "kids"
 CONF_USE_TODO = "use_todo"

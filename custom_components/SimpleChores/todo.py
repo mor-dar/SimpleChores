@@ -35,17 +35,21 @@ class KidTodoList(TodoListEntity):
         for i, old in enumerate(self._items):
             if old.uid == item.uid:
                 self._items[i] = item
-                # award points on completion if your UI passes a points value via item.description or a mapping
-                if item.status == TodoItemStatus.COMPLETED:
-                    # naive: try to parse "(+X)" at end of summary
-                    pts = 0
-                    if item.summary and item.summary.strip().endswith(")"):
-                        try:
-                            pts = int(item.summary.split("(+")[1].split(")")[0])
-                        except Exception:
-                            pts = 0
-                    if pts:
-                        await self._coord.add_points(self._kid_id, pts, f"Chore: {item.summary}", "earn")
+                # Award points on completion
+                if item.status == TodoItemStatus.COMPLETED and old.status != TodoItemStatus.COMPLETED:
+                    # First try to complete by UID (for tracked chores)
+                    success = await self._coord.complete_chore_by_uid(item.uid)
+                    
+                    if not success:
+                        # Fallback: try to parse "(+X)" from summary for manual chores
+                        pts = 0
+                        if item.summary and "(+" in item.summary and ")" in item.summary:
+                            try:
+                                pts = int(item.summary.split("(+")[1].split(")")[0])
+                            except Exception:
+                                pts = 0
+                        if pts:
+                            await self._coord.add_points(self._kid_id, pts, f"Chore: {item.summary}", "earn")
                 break
         self.async_write_ha_state()
 

@@ -8,35 +8,92 @@ sections:
   - type: grid
     cards:
       - type: heading
-        heading: Kids' points
+        heading: Kids' Points
       - type: tile
         entity: number.alex_points
         name: Alex
+        features:
+          - type: number-buttons
+            step: 1
       - type: tile
         entity: number.emma_points
         name: Emma
+        features:
+          - type: number-buttons
+            step: 1
 
   - type: grid
     cards:
       - type: heading
-        heading: Chore lists
+        heading: Weekly Progress
+      - type: tile
+        entity: sensor.alex_points_week
+        name: Alex This Week
+      - type: tile
+        entity: sensor.emma_points_week
+        name: Emma This Week
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Chore Lists
       - type: todo-list
         entity: todo.alex_chores
+        title: Alex's Chores
       - type: todo-list
         entity: todo.emma_chores
+        title: Emma's Chores
 
   - type: grid
     cards:
       - type: heading
-        heading: Quick actions
+        heading: Create New Chore
       - type: entity
-        entity: script.simplechores_claim_reward  # from blueprint after you create a script instance
-        name: Claim reward (script)
+        entity: text.simplechores_chore_title_input
+        name: Chore Title
+      - type: entity
+        entity: text.simplechores_chore_points_input
+        name: Points
+      - type: entity
+        entity: text.simplechores_chore_kid_input
+        name: Kid
+      - type: button
+        entity: button.simplechores_create_chore_button
+        name: Create Chore
+        tap_action:
+          action: call-service
+          service: button.press
+          target:
+            entity_id: button.simplechores_create_chore_button
 
   - type: grid
     cards:
       - type: heading
-        heading: Parents' calendar
+        heading: Rewards
+      - type: button
+        entity: button.simplechores_reward_movie_night_alex
+        name: Movie Night (Alex)
+      - type: button
+        entity: button.simplechores_reward_movie_night_emma
+        name: Movie Night (Emma)
+      - type: button
+        entity: button.simplechores_reward_ice_cream_alex
+        name: Ice Cream (Alex)
+      - type: button
+        entity: button.simplechores_reward_ice_cream_emma
+        name: Ice Cream (Emma)
+      - type: button
+        entity: button.simplechores_reward_trip_park_alex
+        name: Park Trip (Alex)
+      - type: button
+        entity: button.simplechores_reward_trip_park_emma
+        name: Park Trip (Emma)
+
+  - type: grid
+    cards:
+      - type: heading
+        heading: Parents' Calendar
       - type: calendar
         entities:
           - calendar.parents
+        title: Family Schedule
