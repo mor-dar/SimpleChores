@@ -55,9 +55,16 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 ### To-do lists (optional)
 - `todo.<kid>_chores` – if enabled, integration exposes a To-do list entity per child.
 
-### Sensors (planned)
-- `sensor.<kid>_points_week`
-- `sensor.<kid>_points_total`
+### Sensors
+- `sensor.<kid>_points_week` – points earned this week
+- `sensor.<kid>_points_total` – total points earned all-time
+
+### Dashboard Helpers
+- `text.simplechores_chore_title_input` – chore title input
+- `text.simplechores_chore_points_input` – points value input
+- `text.simplechores_chore_kid_input` – kid selection input
+- `button.simplechores_create_chore_button` – create chore action
+- `button.simplechores_reward_*` – reward claim buttons per kid
 
 ---
 
@@ -123,9 +130,9 @@ A ready-to-use Lovelace view is included:
 ## 🧑‍💻 Development
 
 This integration follows HA best practices:
-- Platforms: `number/`, `todo/`, `sensor/`  
-- Services: registered via `async_register`  
-- Storage: HA `Store` API for ledger/history
+- Platforms: `number/`, `todo/`, `sensor/`, `text/`, `button/`  
+- Services: registered via `async_register` with voluptuous schemas
+- Storage: HA `Store` API v2 for ledger/history with data models
 
 Scaffold created with [cookiecutter-homeassistant-custom-component](https://github.com/oncleben31/cookiecutter-homeassistant-custom-component).
 
@@ -133,8 +140,10 @@ Scaffold created with [cookiecutter-homeassistant-custom-component](https://gith
 
 ## 🚀 Roadmap / TODO
 
-- [ ] **Config UI for rewards** (currently defined in YAML/JSON)
-- [ ] **Weekly/monthly summary sensors** (`points_this_week`, etc.)
+- [x] **Weekly/monthly summary sensors** – ✅ Implemented (`sensor.<kid>_points_week`, `sensor.<kid>_points_total`)
+- [x] **Rewards system** – ✅ Implemented with default rewards and calendar integration
+- [x] **Dashboard input helpers** – ✅ Implemented with text inputs and action buttons
+- [ ] **Config UI for rewards** (currently uses default rewards, could add config flow step)
 - [ ] **Ledger dashboard** (history of points earned/spent with reasons)
 - [ ] **Mobile-friendly dashboard pack** (Mushroom UI optional)
 - [ ] **Import tool** for KidsChores users

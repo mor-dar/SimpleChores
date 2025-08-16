@@ -11,30 +11,39 @@ SimpleChores is a Home Assistant custom integration for managing kids' chores, p
 The integration follows Home Assistant custom component patterns:
 
 - **Domain**: `simplechores` (defined in manifest.json)
-- **Platforms**: `number`, `todo`, `sensor` entities for per-child functionality
+- **Platforms**: `number`, `todo`, `sensor`, `text`, `button` entities for per-child functionality
 - **Config Flow**: User setup wizard for adding children and configuring calendars/todo lists
 - **Data Coordinator**: Manages data updates and state synchronization
-- **Storage**: Uses HA Store API for persistent ledger/history in `.storage`
+- **Storage**: Uses HA Store API (v2) for persistent ledger/history in `.storage`
 - **Services**: Custom services for points management, chore creation, and reward claiming
 
 ### Key Components
 
 - `number.py`: Per-child points balance entities (`number.<kid>_points`)
 - `todo.py`: Optional to-do list entities per child (`todo.<kid>_chores`)
-- `sensor.py`: Summary sensors (planned: weekly/total points)
-- `coordinator.py`: Data coordination and state management
+- `sensor.py`: Weekly and total points sensors (`sensor.<kid>_points_week`, `sensor.<kid>_points_total`)
+- `text.py`: Input helper entities for dashboard chore creation
+- `button.py`: Action buttons for chore creation and reward claiming
+- `coordinator.py`: Data coordination with rewards and chore tracking
 - `storage.py`: Persistent data handling via HA Store API
-- `models.py`: Data models for chores, rewards, and transactions
+- `models.py`: Data models for kids, chores, rewards, ledger entries, and pending chores
 - `config_flow.py`: Setup wizard for integration configuration
 
 ### Services Architecture
 
 All services use the `simplechores` domain:
-- `add_points` / `remove_points`: Points management
-- `create_adhoc_chore`: One-time chore creation
-- `complete_chore`: Marks chore done and awards points
-- `claim_reward`: Deducts points and creates calendar events
-- `log_parent_chore`: Adds parent chores to shared calendar
+- `add_points` / `remove_points`: Points management with validation schemas
+- `create_adhoc_chore`: One-time chore creation with point tracking via PendingChore system
+- `complete_chore`: Marks chore done and awards points (supports both `chore_id` and `todo_uid`)
+- `claim_reward`: Deducts points and optionally creates calendar events using reward definitions
+- `log_parent_chore`: Adds parent chores to shared calendar with error handling
+
+### Rewards System
+
+- Default rewards: Movie Night (20pts), Extra Allowance (25pts), Park Trip (30pts), Ice Cream (15pts)
+- Configurable calendar event creation with duration settings
+- Automatic point validation and deduction
+- Extensible reward definitions stored in coordinator
 
 ## Installation & Development
 
@@ -66,16 +75,19 @@ Both patterns use the blueprints in `blueprints/automation/` for user setup.
 ## Dashboard Integration
 
 Ships with prebuilt Lovelace dashboard (`dashboard/simplechores-view.yaml`) using core HA cards:
-- Number entities for points balances
-- To-do list cards per child
-- Input helpers for ad-hoc chore creation
-- Rewards claiming interface
-- Parents' calendar display
+- Number entities with increment/decrement buttons for points balances
+- Weekly and total points tracking sensors
+- To-do list cards per child with automatic point awards
+- Text input helpers for ad-hoc chore creation (title, points, kid selection)
+- Button entities for chore creation and reward claiming
+- Rewards section with per-kid reward buttons (disabled when insufficient points)
+- Parents' calendar display for family events
 
 ## Data Storage
 
-Uses HA's Store API for:
-- Points ledger (transactions with reasons)
-- Chore history
-- Reward definitions and claims
-- Persistent state across HA restarts
+Uses HA's Store API (version 2) for:
+- Points ledger (transactions with timestamps, reasons, and categories)
+- Pending chores tracking (UUID-based with point values)
+- Reward definitions (title, cost, description, calendar settings)
+- Kid profiles and point balances
+- Persistent state across HA restarts with automatic migration

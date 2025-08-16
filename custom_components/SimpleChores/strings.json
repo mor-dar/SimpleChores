@@ -3,17 +3,65 @@
   "config": {
     "step": {
       "user": {
-        "title": "SimpleChores setup",
-        "description": "Add kids and options",
+        "title": "SimpleChores Setup",
+        "description": "Configure children and integration options for SimpleChores family management system.",
         "data": {
-          "kids": "Kid IDs (comma-separated)",
-          "use_todo": "Create To-do lists per kid",
-          "parents_calendar": "Parents calendar entity_id"
+          "kids": "Children Names",
+          "use_todo": "Enable To-Do Lists",
+          "parents_calendar": "Parents Calendar Entity"
+        },
+        "data_description": {
+          "kids": "Enter child names separated by commas (e.g., alex,emma,sam)",
+          "use_todo": "Create individual to-do list entities for each child to track chores",
+          "parents_calendar": "Calendar entity ID for logging parent chores (e.g., calendar.parents)"
         }
       }
     },
     "abort": {
-      "single_instance_allowed": "Only one SimpleChores instance is allowed"
+      "single_instance_allowed": "Only one SimpleChores instance is allowed per Home Assistant installation"
+    },
+    "error": {
+      "cannot_connect": "Failed to initialize SimpleChores coordinator",
+      "invalid_auth": "Invalid configuration provided",
+      "unknown": "Unexpected error occurred during setup"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SimpleChores Options",
+        "description": "Modify SimpleChores integration settings.",
+        "data": {
+          "use_todo": "Enable To-Do Lists",
+          "parents_calendar": "Parents Calendar Entity"
+        }
+      }
+    }
+  },
+  "services": {
+    "add_points": {
+      "name": "Add Points",
+      "description": "Add points to a child's balance"
+    },
+    "remove_points": {
+      "name": "Remove Points", 
+      "description": "Remove points from a child's balance"
+    },
+    "create_adhoc_chore": {
+      "name": "Create Chore",
+      "description": "Create a one-time chore with point reward"
+    },
+    "complete_chore": {
+      "name": "Complete Chore",
+      "description": "Mark a chore as completed and award points"
+    },
+    "claim_reward": {
+      "name": "Claim Reward",
+      "description": "Claim a reward by spending points"
+    },
+    "log_parent_chore": {
+      "name": "Log Parent Chore",
+      "description": "Add a parent chore to the family calendar"
     }
   }
 }

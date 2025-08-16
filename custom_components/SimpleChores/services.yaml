@@ -1,66 +1,174 @@
 # Services for SimpleChores integration
 add_points:
   name: Add points
+  description: Add points to a child's balance with optional reason
   fields:
     kid:
-      description: Kid ID
+      description: Kid ID (must match config)
+      required: true
       example: alex
+      selector:
+        text:
     amount:
-      description: Amount to add
+      description: Amount to add (positive integer)
+      required: true
       example: 5
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
     reason:
       description: Reason (shown in ledger)
+      required: false
+      default: "Manual adjust"
       example: Good behavior
+      selector:
+        text:
 
 remove_points:
   name: Remove points
+  description: Remove points from a child's balance with optional reason
   fields:
     kid:
-      description: Kid ID
+      description: Kid ID (must match config)
+      required: true
+      selector:
+        text:
     amount:
-      description: Amount to remove
+      description: Amount to remove (positive integer)
+      required: true
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
     reason:
-      description: Reason
+      description: Reason (shown in ledger)
+      required: false
+      default: "Manual adjust"
+      selector:
+        text:
 
 create_adhoc_chore:
   name: Create ad-hoc chore
+  description: Create a one-time chore that awards points when completed
   fields:
     kid:
-      description: Kid ID
+      description: Kid ID (must match config)
+      required: true
+      selector:
+        text:
     title:
-      description: Chore title
+      description: Chore title (will appear in todo list)
+      required: true
+      example: "Clean room"
+      selector:
+        text:
     points:
       description: Points awarded on completion
+      required: true
+      example: 5
+      selector:
+        number:
+          min: 1
+          max: 50
+          step: 1
     due:
-      description: ISO datetime (optional)
+      description: Due date/time (ISO format, optional)
+      required: false
+      example: "2025-01-20T18:00:00"
+      selector:
+        datetime:
 
 complete_chore:
   name: Complete chore (award points)
+  description: Mark a chore as complete and award points to the child
   fields:
     kid:
-      description: Kid ID
+      description: Kid ID (required if not using chore_id)
+      required: false
+      selector:
+        text:
     chore_id:
-      description: To-do item ID
+      description: To-do item UID (preferred method)
+      required: false
+      selector:
+        text:
     points:
-      description: Points to award
+      description: Points to award (fallback if chore_id not found)
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 50
+          step: 1
     reason:
-      description: Reason (optional)
+      description: Reason for points (optional)
+      required: false
+      default: "Chore complete"
+      selector:
+        text:
 
 claim_reward:
   name: Claim reward (deduct points)
+  description: Claim a reward by deducting points and optionally creating calendar event
   fields:
     kid:
-      description: Kid ID
+      description: Kid ID (must match config)
+      required: true
+      selector:
+        text:
+    reward_id:
+      description: Reward ID (use for predefined rewards)
+      required: false
+      example: "movie_night"
+      selector:
+        text:
     title:
-      description: Reward title
+      description: Custom reward title (for manual rewards)
+      required: false
+      selector:
+        text:
     cost:
-      description: Points to deduct
+      description: Points to deduct (for manual rewards)
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 100
+          step: 1
 
 log_parent_chore:
   name: Log parent chore to calendar
+  description: Add a parent chore to the family calendar to model teamwork
   fields:
-    service:
-      description: calendar service e.g. google.create_event
-      example: google.create_event
-    data:
-      description: Service data payload for event creation
+    title:
+      description: Chore/task title
+      required: true
+      example: "Mow the lawn"
+      selector:
+        text:
+    description:
+      description: Additional details (optional)
+      required: false
+      selector:
+        text:
+    start:
+      description: Start time (ISO format, defaults to now)
+      required: false
+      example: "2025-01-20T10:00:00"
+      selector:
+        text:
+    end:
+      description: End time (ISO format, defaults to start + 1 hour)
+      required: false
+      example: "2025-01-20T11:00:00"
+      selector:
+        text:
+    all_day:
+      description: All-day event flag
+      required: false
+      default: false
+      selector:
+        boolean:

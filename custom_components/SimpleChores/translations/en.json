@@ -1,5 +1,41 @@
 {
+  "title": "SimpleChores",
   "config": {
-    "title": "SimpleChores"
+    "step": {
+      "user": {
+        "title": "SimpleChores Setup",
+        "description": "Configure children and integration options for SimpleChores family management system.",
+        "data": {
+          "kids": "Children Names",
+          "use_todo": "Enable To-Do Lists",
+          "parents_calendar": "Parents Calendar Entity"
+        },
+        "data_description": {
+          "kids": "Enter child names separated by commas (e.g., alex,emma,sam)",
+          "use_todo": "Create individual to-do list entities for each child to track chores",
+          "parents_calendar": "Calendar entity ID for logging parent chores (e.g., calendar.parents)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one SimpleChores instance is allowed per Home Assistant installation"
+    },
+    "error": {
+      "cannot_connect": "Failed to initialize SimpleChores coordinator",
+      "invalid_auth": "Invalid configuration provided",
+      "unknown": "Unexpected error occurred during setup"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "SimpleChores Options",
+        "description": "Modify SimpleChores integration settings.",
+        "data": {
+          "use_todo": "Enable To-Do Lists",
+          "parents_calendar": "Parents Calendar Entity"
+        }
+      }
+    }
   }
 }
