@@ -12,7 +12,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     coordinator: SimpleChoresCoordinator = hass.data[DOMAIN][entry.entry_id]
     kids_csv = entry.data.get("kids", "alex,emma")
     kids = [k.strip() for k in kids_csv.split(",") if k.strip()]
-    add_entities([SimpleChoresWeekSensor(coordinator, kid) for kid in kids], True)
+    
+    entities = []
+    for kid in kids:
+        entities.append(SimpleChoresWeekSensor(coordinator, kid))
+        entities.append(SimpleChoresTotalSensor(coordinator, kid))
+    
+    add_entities(entities, True)
 
 class SimpleChoresWeekSensor(SensorEntity):
     def __init__(self, coord: SimpleChoresCoordinator, kid_id: str):
@@ -20,6 +26,8 @@ class SimpleChoresWeekSensor(SensorEntity):
         self._kid_id = kid_id
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points_week"
         self._attr_name = f"{kid_id.capitalize()} Points (This Week)"
+        # Set entity_id to match README examples
+        self.entity_id = f"sensor.{kid_id}_points_week"
 
     @property
     def native_value(self):
@@ -29,6 +37,29 @@ class SimpleChoresWeekSensor(SensorEntity):
             return 0
         monday = (datetime.now() - timedelta(days=datetime.now().weekday())).timestamp()
         return sum(e.delta for e in model.ledger if e.kid_id == self._kid_id and e.ts >= monday)
+    
+    @property
+    def available(self) -> bool:
+        """Check if coordinator is ready."""
+        return self._coord.model is not None
+
+class SimpleChoresTotalSensor(SensorEntity):
+    def __init__(self, coord: SimpleChoresCoordinator, kid_id: str):
+        self._coord = coord
+        self._kid_id = kid_id
+        self._attr_unique_id = f"{DOMAIN}_{kid_id}_points_total"
+        self._attr_name = f"{kid_id.capitalize()} Points (Total Earned)"
+        self._attr_icon = "mdi:star-circle-outline"
+        # Set entity_id to match README examples
+        self.entity_id = f"sensor.{kid_id}_points_total"
+
+    @property
+    def native_value(self):
+        # Total points earned (not current balance)
+        model = self._coord.model
+        if not model or not model.ledger:
+            return 0
+        return sum(e.delta for e in model.ledger if e.kid_id == self._kid_id and e.delta > 0)
     
     @property
     def available(self) -> bool:

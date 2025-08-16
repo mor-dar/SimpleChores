@@ -27,6 +27,8 @@ class SimpleChoresNumber(NumberEntity):
         self._kid_id = kid_id
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points"
         self._attr_name = f"{kid_id.capitalize()} Points"
+        # Set entity_id to match README examples
+        self.entity_id = f"number.{kid_id}_points"
 
     @property
     def native_value(self) -> float | None:

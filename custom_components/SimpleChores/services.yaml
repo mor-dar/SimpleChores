@@ -39,6 +39,8 @@ complete_chore:
   fields:
     kid:
       description: Kid ID
+    chore_id:
+      description: To-do item ID
     points:
       description: Points to award
     reason:

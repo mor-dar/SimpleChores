@@ -54,7 +54,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def _complete_chore(call: ServiceCall):
         data = call.data
-        todo_uid = data.get("todo_uid")
+        todo_uid = data.get("todo_uid") or data.get("chore_id")  # Support both names
         
         if todo_uid:
             # Complete chore by UID (preferred method)
@@ -159,6 +159,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     complete_chore_schema = vol.Schema({
         vol.Optional("todo_uid"): cv.string,
+        vol.Optional("chore_id"): cv.string,  # Alias for todo_uid
         vol.Optional("kid"): cv.string,
         vol.Optional("points"): cv.positive_int,
         vol.Optional("reason"): cv.string,

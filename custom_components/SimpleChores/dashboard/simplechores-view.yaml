@@ -36,6 +36,17 @@ sections:
   - type: grid
     cards:
       - type: heading
+        heading: Total Points Earned
+      - type: tile
+        entity: sensor.alex_points_total
+        name: Alex Total
+      - type: tile
+        entity: sensor.emma_points_total
+        name: Emma Total
+
+  - type: grid
+    cards:
+      - type: heading
         heading: Chore Lists
       - type: todo-list
         entity: todo.alex_chores
