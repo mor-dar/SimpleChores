@@ -33,6 +33,11 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
         self._attr_name = "Create Chore"
 
     async def async_press(self) -> None:
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        _LOGGER.info("SimpleChores: Create chore button pressed")
+        
         # Get values from input helpers - use entity registry for proper entity IDs
         from homeassistant.helpers import entity_registry as er
         
@@ -51,7 +56,10 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
             elif entry.unique_id == f"{DOMAIN}_chore_kid_input":
                 kid_entity_id = entry.entity_id
         
+        _LOGGER.debug(f"SimpleChores: Found entity IDs - title: {title_entity_id}, points: {points_entity_id}, kid: {kid_entity_id}")
+        
         if not all([title_entity_id, points_entity_id, kid_entity_id]):
+            _LOGGER.warning("SimpleChores: Could not find all required text input entities")
             return
             
         title_entity = self._hass.states.get(title_entity_id)
@@ -59,6 +67,7 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
         kid_entity = self._hass.states.get(kid_entity_id)
         
         if not all([title_entity, points_entity, kid_entity]):
+            _LOGGER.warning("SimpleChores: Could not get states for all text input entities")
             return
             
         title = title_entity.state
@@ -68,12 +77,20 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
             points = 5
         kid = kid_entity.state
         
+        _LOGGER.info(f"SimpleChores: Creating chore - title: '{title}', points: {points}, kid: '{kid}'")
+        
         if title and kid:
             # Create chore via service
-            await self._hass.services.async_call(
-                DOMAIN, "create_adhoc_chore",
-                {"kid": kid, "title": title, "points": points}
-            )
+            try:
+                await self._hass.services.async_call(
+                    DOMAIN, "create_adhoc_chore",
+                    {"kid": kid, "title": title, "points": points}
+                )
+                _LOGGER.info("SimpleChores: Successfully called create_adhoc_chore service")
+            except Exception as e:
+                _LOGGER.error(f"SimpleChores: Failed to call create_adhoc_chore service: {e}")
+        else:
+            _LOGGER.warning(f"SimpleChores: Missing title or kid - title: '{title}', kid: '{kid}'")
 
 class SimpleChoresRewardButton(ButtonEntity):
     _attr_icon = "mdi:gift"

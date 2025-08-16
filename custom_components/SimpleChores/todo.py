@@ -1,7 +1,7 @@
 """Todo entities for SimpleChores integration."""
 from __future__ import annotations
 from typing import List
-from homeassistant.components.todo import TodoListEntity, TodoItem, TodoItemStatus
+from homeassistant.components.todo import TodoListEntity, TodoItem, TodoItemStatus, TodoListEntityFeature
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -23,13 +23,61 @@ class KidTodoList(TodoListEntity):
         self._items: List[TodoItem] = []
         self._attr_name = f"{kid_id.capitalize()} Chores"
         self._attr_unique_id = f"simplechores_todo_{kid_id}"
+        self.entity_id = f"todo.{kid_id}_chores"
+        # Enable todo features
+        self._attr_supported_features = (
+            TodoListEntityFeature.CREATE_TODO_ITEM |
+            TodoListEntityFeature.UPDATE_TODO_ITEM |
+            TodoListEntityFeature.DELETE_TODO_ITEM
+        )
+        
+        # Store reference in coordinator for direct access
+        if not hasattr(coord, '_todo_entities'):
+            coord._todo_entities = {}
+        coord._todo_entities[kid_id] = self
+        
+        # Add a test item to verify the todo list is working
+        import uuid
+        test_item = TodoItem(
+            summary="Test chore - check if todo list works",
+            uid=str(uuid.uuid4()),
+            status=TodoItemStatus.NEEDS_ACTION
+        )
+        self._items.append(test_item)
 
     async def async_get_items(self):
+        """Get todo items - called by Home Assistant."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.debug(f"SimpleChores: async_get_items called, returning {len(self._items)} items")
+        return self._items
+    
+    async def async_get_todo_items(self):
+        """Alternative method name that Home Assistant might call."""
+        return await self.async_get_items()
+    
+    @property
+    def todo_items(self) -> List[TodoItem]:
+        """Property access to todo items."""
         return self._items
 
     async def async_create_item(self, item: TodoItem):
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.debug(f"SimpleChores: Creating todo item: {item}")
         self._items.append(item)
+        # Force state update
         self.async_write_ha_state()
+        # Also schedule an update
+        self.async_schedule_update_ha_state(force_refresh=True)
+        _LOGGER.info(f"SimpleChores: Todo item created successfully. Total items: {len(self._items)}")
+    
+    async def async_create_todo_item(self, item: TodoItem) -> None:
+        """Create a new todo item - this is the method Home Assistant calls."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.debug(f"SimpleChores: async_create_todo_item called with: {item}")
+        await self.async_create_item(item)
 
     async def async_update_item(self, item: TodoItem):
         for i, old in enumerate(self._items):
@@ -53,6 +101,15 @@ class KidTodoList(TodoListEntity):
                 break
         self.async_write_ha_state()
 
+    async def async_update_todo_item(self, item: TodoItem) -> None:
+        """Update a todo item - this is the method Home Assistant calls."""
+        await self.async_update_item(item)
+
     async def async_delete_item(self, uid: str):
         self._items = [i for i in self._items if i.uid != uid]
         self.async_write_ha_state()
+
+    async def async_delete_todo_items(self, uids: list[str]) -> None:
+        """Delete todo items - this is the method Home Assistant calls."""
+        for uid in uids:
+            await self.async_delete_item(uid)

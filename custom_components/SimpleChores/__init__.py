@@ -63,6 +63,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await coordinator.remove_points(data["kid"], int(data["amount"]), data.get("reason","adjust"), "adjust")
 
     async def _create_adhoc(call: ServiceCall):
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
         data = call.data
         title = data["title"]
         points = int(data["points"])
@@ -71,21 +74,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         
         # Create pending chore to track points
         todo_uid = await coordinator.create_pending_chore(kid, title, points)
+        _LOGGER.debug(f"SimpleChores: Created pending chore {todo_uid} for {kid}")
         
-        # Create todo item with points in summary for easy identification
+        # Try to create todo item if todo entities are available
         title_with_points = f"{title} (+{points})"
+        entity_id = f"todo.{kid}_chores"
+        
+        # Try to create todo item
         try:
-            await hass.services.async_call(
-                "todo", "add_item",
-                {
-                    "entity_id": f"todo.{kid}_chores", 
-                    "item": title_with_points
-                },
-                blocking=False,
-            )
+            _LOGGER.debug(f"SimpleChores: Attempting to create todo item '{title_with_points}' for entity {entity_id}")
+            
+            # Method 1: Try the standard todo service call
+            try:
+                await hass.services.async_call(
+                    "todo", "add_item",
+                    {
+                        "entity_id": entity_id, 
+                        "item": title_with_points
+                    },
+                    blocking=False,
+                )
+                _LOGGER.info(f"SimpleChores: Successfully created todo item via service call")
+            except Exception as service_error:
+                _LOGGER.warning(f"SimpleChores: todo.add_item service failed: {service_error}")
+                
+                # Method 2: Try to find and call the entity directly via coordinator
+                if hasattr(coordinator, '_todo_entities') and kid in coordinator._todo_entities:
+                    todo_entity = coordinator._todo_entities[kid]
+                    _LOGGER.debug(f"SimpleChores: Found todo entity for {kid}, calling direct method")
+                    from homeassistant.components.todo import TodoItem
+                    new_item = TodoItem(summary=title_with_points, uid=todo_uid)
+                    await todo_entity.async_create_item(new_item)
+                    _LOGGER.info(f"SimpleChores: Created todo item via direct entity method")
+                else:
+                    _LOGGER.warning(f"SimpleChores: No todo entity found for kid {kid}")
+                
         except Exception as e:
-            # If todo service fails, still track the chore
-            pass
+            _LOGGER.warning(f"SimpleChores: Failed to create todo item: {e}")
+            # Chore is still tracked via pending_chores, so this is not critical
 
     async def _complete_chore(call: ServiceCall):
         data = call.data
