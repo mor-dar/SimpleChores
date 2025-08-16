@@ -102,8 +102,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if hasattr(coordinator, '_todo_entities') and kid in coordinator._todo_entities:
                     todo_entity = coordinator._todo_entities[kid]
                     _LOGGER.debug(f"SimpleChores: Found todo entity for {kid}, calling direct method")
-                    from homeassistant.components.todo import TodoItem
-                    new_item = TodoItem(summary=title_with_points, uid=todo_uid)
+                    from homeassistant.components.todo import TodoItem, TodoItemStatus
+                    new_item = TodoItem(
+                        summary=title_with_points, 
+                        uid=todo_uid,
+                        status=TodoItemStatus.NEEDS_ACTION
+                    )
                     await todo_entity.async_create_item(new_item)
                     _LOGGER.info(f"SimpleChores: Created todo item via direct entity method")
                 else:
