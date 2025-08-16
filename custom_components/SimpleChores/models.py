@@ -1,0 +1,1 @@
+"""Data models for SimpleChores integration."""

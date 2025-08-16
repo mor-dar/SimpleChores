@@ -1,0 +1,1 @@
+"""Sensor entities for SimpleChores integration."""

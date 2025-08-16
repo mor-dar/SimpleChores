@@ -1,0 +1,11 @@
+{
+  "domain": "simplechores",
+  "name": "SimpleChores",
+  "version": "1.0.0",
+  "documentation": "https://github.com/example/simplechores",
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": [],
+  "config_flow": true,
+  "iot_class": "local_polling"
+}

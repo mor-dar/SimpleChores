@@ -1,0 +1,1 @@
+"""Data coordinator for SimpleChores integration."""

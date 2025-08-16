@@ -1,0 +1,1 @@
+"""Config flow for SimpleChores integration."""
