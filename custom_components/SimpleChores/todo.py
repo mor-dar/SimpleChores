@@ -108,8 +108,9 @@ class KidTodoList(TodoListEntity):
 
         for i, old in enumerate(self._items):
             if old.uid == item.uid:
-                _LOGGER.debug(f"SimpleChores: Found item to update - old status: {old.status}, new status: {item.status}")
-                self._items[i] = item
+                _LOGGER.debug(
+                    f"SimpleChores: Found item to update - old status: {old.status}, new status: {item.status}"
+                )
                 # Handle chore completion with approval workflow
                 if item.status == TodoItemStatus.COMPLETED and old.status != TodoItemStatus.COMPLETED:
                     _LOGGER.info(f"SimpleChores: Item completed: {item.summary}")
@@ -119,6 +120,7 @@ class KidTodoList(TodoListEntity):
                         _LOGGER.info(f"SimpleChores: Item already pending approval, skipping: {item.summary}")
                         # Reset status back to needs action to show pending state
                         item.status = TodoItemStatus.NEEDS_ACTION
+                        self._items[i] = item
                         continue
 
                     # Check if this is a tracked chore that needs approval
@@ -195,6 +197,9 @@ class KidTodoList(TodoListEntity):
                         await self._coord._update_approval_buttons()
 
                         _LOGGER.info(f"SimpleChores: Undid pending approval for: {item.summary}")
+
+                # Update the item in the list after all modifications
+                self._items[i] = item
                 break
         self.async_write_ha_state()
 
@@ -227,7 +232,37 @@ class KidTodoList(TodoListEntity):
             _LOGGER.error(f"SimpleChores: Traceback: {traceback.format_exc()}")
 
     async def async_delete_item(self, uid: str):
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.debug(f"SimpleChores: Deleting todo item: {uid}")
+
+        # Remove the item from the todo list
         self._items = [i for i in self._items if i.uid != uid]
+
+        # Clean up associated pending chore data
+        removed_pending_chore = False
+        if uid in self._coord.model.pending_chores:
+            _LOGGER.info(f"SimpleChores: Removing pending chore for deleted item: {uid}")
+            del self._coord.model.pending_chores[uid]
+            removed_pending_chore = True
+
+        # Clean up any associated pending approvals
+        approvals_to_remove = []
+        for approval_id, approval in self._coord.model.pending_approvals.items():
+            if approval.todo_uid == uid:
+                approvals_to_remove.append(approval_id)
+
+        for approval_id in approvals_to_remove:
+            _LOGGER.info(f"SimpleChores: Removing pending approval for deleted item: {approval_id}")
+            del self._coord.model.pending_approvals[approval_id]
+
+        # Save the updated coordinator state if we removed any data
+        if removed_pending_chore or approvals_to_remove:
+            await self._coord.async_save()
+            # Update approval buttons if any approvals were removed
+            if approvals_to_remove:
+                await self._coord._update_approval_buttons()
+
         self.async_write_ha_state()
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
