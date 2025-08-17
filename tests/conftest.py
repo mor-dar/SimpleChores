@@ -81,3 +81,24 @@ def mock_storage_data():
         "pending_approvals": {},
     }
 
+
+@pytest.fixture
+def coordinator(mock_hass):
+    """Return a mock coordinator."""
+    from unittest.mock import patch
+    from custom_components.simplechores.coordinator import SimpleChoresCoordinator
+    from custom_components.simplechores.models import StorageModel
+    
+    # Patch the Store to avoid real file operations
+    with patch('custom_components.simplechores.coordinator.SimpleChoresStore') as mock_store_class:
+        mock_store = AsyncMock()
+        mock_store.async_save = AsyncMock()
+        mock_store.async_load = AsyncMock(return_value=StorageModel())
+        mock_store_class.return_value = mock_store
+        
+        coord = SimpleChoresCoordinator(mock_hass)
+        coord.model = StorageModel()
+        coord.store = mock_store
+        
+    return coord
+
