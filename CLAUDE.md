@@ -50,7 +50,91 @@ All services use the `simplechores` domain:
 This is a Home Assistant custom component that goes in `config/custom_components/simplechores/`.
 
 ### Testing
-Home Assistant development typically uses:
+
+The integration includes comprehensive pytest test coverage:
+
+#### Running Tests
+```bash
+# Set up test environment
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements_test.txt
+
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test files
+python -m pytest tests/test_models.py -v
+python -m pytest tests/test_coordinator.py -v
+python -m pytest tests/test_platforms.py -v
+python -m pytest tests/test_integration.py -v
+python -m pytest tests/test_config_flow.py -v
+
+# Run with coverage
+python -m pytest tests/ --cov=custom_components.simplechores --cov-report=html
+```
+
+#### Test Structure
+- `tests/test_models.py` - Unit tests for data models (Kid, LedgerEntry, Reward, etc.)
+- `tests/test_storage.py` - Tests for HA Store API integration
+- `tests/test_coordinator.py` - Tests for core business logic and state management
+- `tests/test_platforms.py` - Tests for HA platform entities (number, sensor, text, button)
+- `tests/test_config_flow.py` - Integration tests for setup wizard
+- `tests/test_integration.py` - End-to-end service tests
+- `tests/conftest.py` - Shared test fixtures and configuration
+
+#### Test Coverage
+All core functionality is tested including:
+- Data model validation and serialization
+- Points management and ledger tracking
+- Chore creation, completion, and approval workflows
+- Reward claiming with calendar integration
+- Entity state management and updates
+- Service call validation and execution
+- Config flow user interactions
+
+#### Testing Best Practices
+Following Home Assistant testing guidelines (https://developers.home-assistant.io/docs/development_testing/):
+
+**Entity Testing:**
+- Mock `hass` instance and `async_write_ha_state()` for entity tests
+- Test entity states through the core state machine when possible
+- Use proper async fixtures with `@pytest_asyncio.fixture`
+
+**Integration Testing:**
+- Use `async_setup_component` or `async_setup` for integration setup
+- Assert states via `hass.states`
+- Perform service calls via `hass.services`
+
+**Storage Mocking:**
+- Properly mock `Store.async_save` and `Store.async_load` as `AsyncMock`
+- Inject mock stores into coordinator fixtures
+- Test data persistence and state management
+
+### Code Quality & Linting
+
+#### Ruff Configuration
+The project uses ruff for fast Python linting configured in `pyproject.toml`:
+
+```bash
+# Check for linting issues
+ruff check custom_components/SimpleChores/ tests/
+
+# Auto-fix issues
+ruff check --fix custom_components/SimpleChores/ tests/
+
+# Format code
+ruff format custom_components/SimpleChores/ tests/
+```
+
+#### Standards
+- PEP 8 compliance with 120 character line limit
+- Modern Python type hints (`str | None` instead of `Optional[str]`)
+- Home Assistant coding conventions
+- Import sorting and organization
+- Consistent code formatting
+
+Home Assistant development can also use:
 - `hass --script check_config` for configuration validation
 - HA test framework for integration testing
 - Manual testing within a Home Assistant instance

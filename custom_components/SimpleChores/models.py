@@ -1,8 +1,9 @@
 """Data models for SimpleChores integration."""
 from __future__ import annotations
+
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
 from datetime import datetime
+
 
 @dataclass
 class Kid:
@@ -36,8 +37,8 @@ class PendingChore:
     points: int
     created_ts: float
     status: str = "pending"  # "pending" | "completed" | "approved" | "rejected"
-    completed_ts: Optional[float] = None
-    approved_ts: Optional[float] = None
+    completed_ts: float | None = None
+    approved_ts: float | None = None
 
 @dataclass
 class RecurringChore:
@@ -47,7 +48,7 @@ class RecurringChore:
     points: int
     kid_id: str
     schedule_type: str  # "daily" | "weekly"
-    day_of_week: Optional[int] = None  # 0=Monday, 6=Sunday (for weekly chores)
+    day_of_week: int | None = None  # 0=Monday, 6=Sunday (for weekly chores)
     enabled: bool = True
     created_ts: float = field(default_factory=lambda: datetime.now().timestamp())
 
@@ -64,9 +65,9 @@ class PendingApproval:
 
 @dataclass
 class StorageModel:
-    kids: Dict[str, Kid] = field(default_factory=dict)
-    ledger: List[LedgerEntry] = field(default_factory=list)
-    rewards: Dict[str, Reward] = field(default_factory=dict)
-    pending_chores: Dict[str, PendingChore] = field(default_factory=dict)  # key: todo_uid
-    recurring_chores: Dict[str, RecurringChore] = field(default_factory=dict)  # key: chore_id
-    pending_approvals: Dict[str, PendingApproval] = field(default_factory=dict)  # key: approval_id
+    kids: dict[str, Kid] = field(default_factory=dict)
+    ledger: list[LedgerEntry] = field(default_factory=list)
+    rewards: dict[str, Reward] = field(default_factory=dict)
+    pending_chores: dict[str, PendingChore] = field(default_factory=dict)  # key: todo_uid
+    recurring_chores: dict[str, RecurringChore] = field(default_factory=dict)  # key: chore_id
+    pending_approvals: dict[str, PendingApproval] = field(default_factory=dict)  # key: approval_id

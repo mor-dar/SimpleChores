@@ -134,6 +134,60 @@ This integration follows HA best practices:
 - Services: registered via `async_register` with voluptuous schemas
 - Storage: HA `Store` API v2 for ledger/history with data models
 
+### Testing
+
+The project includes comprehensive unit and integration tests using pytest:
+
+```bash
+# Set up development environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements_test.txt
+
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test categories
+python -m pytest tests/test_models.py -v  # Unit tests for data models
+python -m pytest tests/test_coordinator.py -v  # Coordinator logic tests
+python -m pytest tests/test_integration.py -v  # Service integration tests
+
+# Run tests with coverage
+python -m pytest tests/ --cov=custom_components.simplechores --cov-report=html
+```
+
+### Code Quality & Linting
+
+The project uses ruff for fast Python linting and formatting:
+
+```bash
+# Install ruff (if not already installed)
+pip install ruff
+
+# Check code for linting issues
+ruff check custom_components/SimpleChores/ tests/
+
+# Auto-fix issues where possible
+ruff check --fix custom_components/SimpleChores/ tests/
+
+# Format code
+ruff format custom_components/SimpleChores/ tests/
+```
+
+All code follows:
+- PEP 8 style guidelines
+- Home Assistant coding conventions
+- Type hints with modern Python syntax (`str | None` instead of `Optional[str]`)
+- Maximum line length of 120 characters
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests and linting: `pytest tests/ && ruff check .`
+5. Submit a pull request
+
 Scaffold created with [cookiecutter-homeassistant-custom-component](https://github.com/oncleben31/cookiecutter-homeassistant-custom-component).
 
 ---

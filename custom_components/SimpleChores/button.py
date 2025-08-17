@@ -1,40 +1,43 @@
 """Button entities for SimpleChores integration."""
 from __future__ import annotations
+
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from .const import DOMAIN
 from .coordinator import SimpleChoresCoordinator
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities: AddEntitiesCallback):
     coordinator: SimpleChoresCoordinator = hass.data[DOMAIN][entry.entry_id]
     kids_csv = entry.data.get("kids", "alex,emma")
     kids = [k.strip() for k in kids_csv.split(",") if k.strip()]
-    
+
     entities = []
     # Create chore button
     entities.append(SimpleChoresCreateChoreButton(coordinator, hass))
-    
+
     # Create recurring chore button
     entities.append(SimpleChoresCreateRecurringButton(coordinator, hass))
-    
+
     # Generate daily chores button
     entities.append(SimpleChoresGenerateDailyButton(coordinator, hass))
-    
+
     # Approval status button
     entities.append(SimpleChoresApprovalStatusButton(coordinator, hass))
-    
+
     # Individual approval buttons will be created dynamically
-    
+
     # Reset rejected chores button
     entities.append(SimpleChoresResetRejectedButton(coordinator, hass))
-    
+
     # Reward buttons - use kids from config since coordinator.model.kids might be empty during setup
     for reward in coordinator.get_rewards():
         for kid_id in kids:
             entities.append(SimpleChoresRewardButton(coordinator, reward.id, kid_id, hass))
-    
+
     add_entities(entities, True)
 
 class SimpleChoresCreateChoreButton(ButtonEntity):
@@ -49,50 +52,50 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
     async def async_press(self) -> None:
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         _LOGGER.info("SimpleChores: Create chore button pressed")
-        
+
         # Get values from input helpers - use entity registry for proper entity IDs
         from homeassistant.helpers import entity_registry as er
-        
+
         er_registry = er.async_get(self._hass)
-        
+
         # Find the text input entities
         title_entity_id = None
         points_entity_id = None
         kid_entity_id = None
-        
+
         for entry in er_registry.entities.values():
             if entry.unique_id == f"{DOMAIN}_chore_title_input":
                 title_entity_id = entry.entity_id
             elif entry.unique_id == f"{DOMAIN}_chore_points_input":
-                points_entity_id = entry.entity_id  
+                points_entity_id = entry.entity_id
             elif entry.unique_id == f"{DOMAIN}_chore_kid_input":
                 kid_entity_id = entry.entity_id
-        
+
         _LOGGER.debug(f"SimpleChores: Found entity IDs - title: {title_entity_id}, points: {points_entity_id}, kid: {kid_entity_id}")
-        
+
         if not all([title_entity_id, points_entity_id, kid_entity_id]):
             _LOGGER.warning("SimpleChores: Could not find all required text input entities")
             return
-            
+
         title_entity = self._hass.states.get(title_entity_id)
         points_entity = self._hass.states.get(points_entity_id)
         kid_entity = self._hass.states.get(kid_entity_id)
-        
+
         if not all([title_entity, points_entity, kid_entity]):
             _LOGGER.warning("SimpleChores: Could not get states for all text input entities")
             return
-            
+
         title = title_entity.state
         try:
             points = int(points_entity.state)
         except (ValueError, TypeError):
             points = 5
         kid = kid_entity.state
-        
+
         _LOGGER.info(f"SimpleChores: Creating chore - title: '{title}', points: {points}, kid: '{kid}'")
-        
+
         if title and kid:
             # Create chore via service
             try:
@@ -135,7 +138,7 @@ class SimpleChoresRewardButton(ButtonEntity):
     async def async_press(self) -> None:
         reward = self._coord.get_reward(self._reward_id)
         kid_points = self._coord.get_points(self._kid_id)
-        
+
         if reward and kid_points >= reward.cost:
             await self._hass.services.async_call(
                 DOMAIN, "claim_reward",
@@ -154,47 +157,47 @@ class SimpleChoresCreateRecurringButton(ButtonEntity):
     async def async_press(self) -> None:
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         _LOGGER.info("SimpleChores: Create recurring chore button pressed")
-        
+
         # Get values from recurring input helpers
         from homeassistant.helpers import entity_registry as er
-        
+
         er_registry = er.async_get(self._hass)
-        
+
         # Find the recurring input entities
         title_entity_id = None
         points_entity_id = None
         kid_entity_id = None
         schedule_entity_id = None
         day_entity_id = None
-        
+
         for entry in er_registry.entities.values():
             if entry.unique_id == f"{DOMAIN}_recurring_title_input":
                 title_entity_id = entry.entity_id
             elif entry.unique_id == f"{DOMAIN}_recurring_points_input":
-                points_entity_id = entry.entity_id  
+                points_entity_id = entry.entity_id
             elif entry.unique_id == f"{DOMAIN}_recurring_kid_input":
                 kid_entity_id = entry.entity_id
             elif entry.unique_id == f"{DOMAIN}_recurring_schedule_input":
                 schedule_entity_id = entry.entity_id
             elif entry.unique_id == f"{DOMAIN}_recurring_day_input":
                 day_entity_id = entry.entity_id
-        
+
         if not all([title_entity_id, points_entity_id, kid_entity_id, schedule_entity_id, day_entity_id]):
             _LOGGER.warning("SimpleChores: Could not find all required recurring chore input entities")
             return
-            
+
         title_entity = self._hass.states.get(title_entity_id)
         points_entity = self._hass.states.get(points_entity_id)
         kid_entity = self._hass.states.get(kid_entity_id)
         schedule_entity = self._hass.states.get(schedule_entity_id)
         day_entity = self._hass.states.get(day_entity_id)
-        
+
         if not all([title_entity, points_entity, kid_entity, schedule_entity, day_entity]):
             _LOGGER.warning("SimpleChores: Could not get states for all recurring chore input entities")
             return
-            
+
         title = title_entity.state
         try:
             points = int(points_entity.state)
@@ -206,20 +209,20 @@ class SimpleChoresCreateRecurringButton(ButtonEntity):
             day_of_week = int(day_entity.state) if schedule_type == "weekly" else None
         except (ValueError, TypeError):
             day_of_week = None
-        
+
         _LOGGER.info(f"SimpleChores: Creating recurring chore - title: '{title}', points: {points}, kid: '{kid}', schedule: '{schedule_type}', day: {day_of_week}")
-        
+
         if title and kid and schedule_type:
             try:
                 service_data = {
-                    "kid": kid, 
-                    "title": title, 
+                    "kid": kid,
+                    "title": title,
                     "points": points,
                     "schedule_type": schedule_type
                 }
                 if day_of_week is not None:
                     service_data["day_of_week"] = day_of_week
-                    
+
                 await self._hass.services.async_call(
                     DOMAIN, "create_recurring_chore",
                     service_data
@@ -242,9 +245,9 @@ class SimpleChoresGenerateDailyButton(ButtonEntity):
     async def async_press(self) -> None:
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         _LOGGER.info("SimpleChores: Generate daily chores button pressed")
-        
+
         try:
             await self._hass.services.async_call(
                 DOMAIN, "generate_recurring_chores",
@@ -290,10 +293,10 @@ class SimpleChoresApprovalStatusButton(ButtonEntity):
     async def async_press(self) -> None:
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         pending_approvals = self._coord.get_pending_approvals()
         _LOGGER.info(f"SimpleChores: {len(pending_approvals)} pending approvals:")
-        
+
         for approval in pending_approvals:
             _LOGGER.info(f"  - ID: {approval.id}, Kid: {approval.kid_id}, Chore: {approval.title}, Points: {approval.points}")
             _LOGGER.info(f"    To approve: simplechores.approve_chore with approval_id: {approval.id}")
@@ -311,9 +314,9 @@ class SimpleChoresResetRejectedButton(ButtonEntity):
     async def async_press(self) -> None:
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         _LOGGER.info("SimpleChores: Reset rejected chores button pressed")
-        
+
         # Find rejected chores and reset them
         reset_count = 0
         for chore in self._coord.model.pending_chores.values():
@@ -322,7 +325,7 @@ class SimpleChoresResetRejectedButton(ButtonEntity):
                 chore.completed_ts = None
                 chore.approved_ts = None
                 reset_count += 1
-                
+
                 # Also reset the todo item if it exists
                 if hasattr(self._coord, '_todo_entities') and chore.kid_id in self._coord._todo_entities:
                     todo_entity = self._coord._todo_entities[chore.kid_id]
@@ -336,12 +339,12 @@ class SimpleChoresResetRejectedButton(ButtonEntity):
                             item.status = TodoItemStatus.NEEDS_ACTION
                             break
                     todo_entity.async_write_ha_state()
-        
+
         # Remove rejected approvals
         rejected_approvals = [a for a in self._coord.model.pending_approvals.values() if a.status == "rejected"]
         for approval in rejected_approvals:
             del self._coord.model.pending_approvals[approval.id]
-        
+
         await self._coord.async_save()
-        
+
         _LOGGER.info(f"SimpleChores: Reset {reset_count} rejected chores and removed {len(rejected_approvals)} rejected approvals")

@@ -1,0 +1,16 @@
+# Test requirements for SimpleChores Home Assistant integration
+
+# Core testing framework
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# Home Assistant testing (minimal requirements for custom component testing)
+# Note: For full HA development, clone HA core and use script/setup
+voluptuous>=0.13.1
+
+# Code quality and linting
+ruff>=0.1.0
+
+# Mock library for testing
+pytest-mock>=3.10.0

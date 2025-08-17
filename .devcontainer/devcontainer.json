@@ -1,0 +1,79 @@
+{
+    "name": "SimpleChores Home Assistant Development",
+    "image": "ha-core-dev:latest",
+    
+    // Mount configuration for development
+	"mounts": [
+		"source=${localEnv:HOME}${localEnv:USERPROFILE},target=${localEnv:HOME}${localEnv:USERPROFILE},type=bind,consistency=cached",
+	],
+    
+    // Set the workspace folder to the current project
+    "workspaceFolder": "/workspaces/SimpleChores",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspaces/SimpleChores,type=bind",
+    
+    // Container user configuration
+    "remoteUser": "vscode",
+    "updateRemoteUserUID": true,
+    
+    // VS Code customizations
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-azuretools.vscode-containers",
+                "ms-python.vscode-pylance", 
+                "ms-python.python",
+                "ms-python.debugpy",
+                "ms-toolsai.vscode-jupyter-cell-tags",
+                "redhat.vscode-yaml",
+                "Anthropic.claude-code"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/home/vscode/.local/ha-venv/bin/python",
+                "python.testing.pytestEnabled": true,
+                "python.testing.unittestEnabled": false,
+                "python.testing.pytestArgs": [
+                    "tests/"
+                ]
+            }
+        }
+    },
+    
+    // Container configuration
+    "containerEnv": {
+        "PYTHONPATH": "/workspaces/SimpleChores"
+    },
+    
+    // // Expose ports for Home Assistant development
+    // "forwardPorts": [8123, 9123],
+    // "portsAttributes": {
+    //     "8123": {
+    //         "label": "Home Assistant",
+    //         "onAutoForward": "notify"
+    //     },
+    //     "9123": {
+    //         "label": "Home Assistant Debug",
+    //         "onAutoForward": "silent"
+    //     }
+    // },
+    
+    // Run commands after container creation
+    "postCreateCommand": [
+        "bash", "-c", 
+        "echo 'Setting up SimpleChores development environment...' && cd /workspaces/SimpleChores && pip install -r requirements_test.txt && echo 'SimpleChores development environment ready!'"
+    ],
+    
+    // Features to install - commented out to avoid Docker Hub pull issues
+    // "features": {
+    //     "ghcr.io/devcontainers/features/git:1": {},
+    //     "ghcr.io/devcontainers/features/github-cli:1": {}
+    // },
+    
+    // Container lifecycle hooks
+    "onCreateCommand": "git config --global --add safe.directory /workspaces/SimpleChores",
+    
+    // Additional container arguments
+    "runArgs": [
+        "--privileged",
+        "--net", "host"
+    ]
+}

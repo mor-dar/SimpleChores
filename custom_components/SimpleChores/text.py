@@ -1,30 +1,33 @@
 """Text input entities for SimpleChores integration."""
 from __future__ import annotations
+
 from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from .const import DOMAIN
 from .coordinator import SimpleChoresCoordinator
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities: AddEntitiesCallback):
     coordinator: SimpleChoresCoordinator = hass.data[DOMAIN][entry.entry_id]
     kids_csv = entry.data.get("kids", "alex,emma")
     kids = [k.strip() for k in kids_csv.split(",") if k.strip()]
-    
+
     entities = []
     # Add chore input helpers
     entities.append(SimpleChoresChoreTitle(coordinator))
     entities.append(SimpleChoresChorePoints(coordinator))
     entities.append(SimpleChoresChoreKid(coordinator, kids))
-    
+
     # Add recurring chore input helpers
     entities.append(SimpleChoresRecurringTitle(coordinator))
     entities.append(SimpleChoresRecurringPoints(coordinator))
     entities.append(SimpleChoresRecurringKid(coordinator, kids))
     entities.append(SimpleChoresRecurringSchedule(coordinator))
     entities.append(SimpleChoresRecurringDay(coordinator))
-    
+
     add_entities(entities, True)
 
 class SimpleChoresChoreTitle(TextEntity):

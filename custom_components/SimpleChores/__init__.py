@@ -1,13 +1,30 @@
 """The SimpleChores integration."""
 from __future__ import annotations
-import voluptuous as vol
+
 from datetime import datetime, timedelta
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers.typing import ConfigType
 import homeassistant.helpers.config_validation as cv
-from .const import DOMAIN, PLATFORMS, SERVICE_ADD_POINTS, SERVICE_REMOVE_POINTS, SERVICE_CREATE_ADHOC, SERVICE_COMPLETE_CHORE, SERVICE_CLAIM_REWARD, SERVICE_LOG_PARENT_CHORE, SERVICE_CREATE_RECURRING, SERVICE_APPROVE_CHORE, SERVICE_REJECT_CHORE, SERVICE_GENERATE_RECURRING
+from homeassistant.helpers.typing import ConfigType
+import voluptuous as vol
+
+from .const import (
+    DOMAIN,
+    PLATFORMS,
+    SERVICE_ADD_POINTS,
+    SERVICE_APPROVE_CHORE,
+    SERVICE_CLAIM_REWARD,
+    SERVICE_COMPLETE_CHORE,
+    SERVICE_CREATE_ADHOC,
+    SERVICE_CREATE_RECURRING,
+    SERVICE_GENERATE_RECURRING,
+    SERVICE_LOG_PARENT_CHORE,
+    SERVICE_REJECT_CHORE,
+    SERVICE_REMOVE_POINTS,
+)
 from .coordinator import SimpleChoresCoordinator
+
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the SimpleChores component."""
@@ -24,32 +41,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _add_points(call: ServiceCall):
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         try:
             _LOGGER.debug("SimpleChores: add_points service called")
             data = call.data
             _LOGGER.debug(f"SimpleChores: service data = {data}")
-            
+
             kid = data["kid"]
             amount = int(data["amount"])
             reason = data.get("reason", "adjust")
-            
+
             _LOGGER.debug(f"SimpleChores: Adding {amount} points to {kid}, reason: {reason}")
             _LOGGER.debug(f"SimpleChores: coordinator = {coordinator}")
             _LOGGER.debug(f"SimpleChores: coordinator.model = {coordinator.model}")
-            
+
             await coordinator.ensure_kid(kid)
             _LOGGER.debug("SimpleChores: ensure_kid completed")
-            
+
             old_points = coordinator.get_points(kid)
             _LOGGER.debug(f"SimpleChores: old_points = {old_points}")
-            
+
             await coordinator.add_points(kid, amount, reason, "adjust")
             _LOGGER.debug("SimpleChores: add_points completed")
-            
+
             new_points = coordinator.get_points(kid)
             _LOGGER.debug(f"SimpleChores: new_points = {new_points}")
-            
+
         except Exception as e:
             _LOGGER.error(f"SimpleChores: add_points service error: {e}")
             _LOGGER.error(f"SimpleChores: error type: {type(e)}")
@@ -65,54 +82,54 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _create_adhoc(call: ServiceCall):
         import logging
         _LOGGER = logging.getLogger(__name__)
-        
+
         data = call.data
         title = data["title"]
         points = int(data["points"])
         kid = data["kid"]
         await coordinator.ensure_kid(kid)
-        
+
         # Create pending chore to track points
         todo_uid = await coordinator.create_pending_chore(kid, title, points)
         _LOGGER.debug(f"SimpleChores: Created pending chore {todo_uid} for {kid}")
-        
+
         # Try to create todo item if todo entities are available
         title_with_points = f"{title} (+{points})"
         entity_id = f"todo.{kid}_chores"
-        
+
         # Try to create todo item
         try:
             _LOGGER.debug(f"SimpleChores: Attempting to create todo item '{title_with_points}' for entity {entity_id}")
-            
+
             # Method 1: Try the standard todo service call
             try:
                 await hass.services.async_call(
                     "todo", "add_item",
                     {
-                        "entity_id": entity_id, 
+                        "entity_id": entity_id,
                         "item": title_with_points
                     },
                     blocking=False,
                 )
-                _LOGGER.info(f"SimpleChores: Successfully created todo item via service call")
+                _LOGGER.info("SimpleChores: Successfully created todo item via service call")
             except Exception as service_error:
                 _LOGGER.warning(f"SimpleChores: todo.add_item service failed: {service_error}")
-                
+
                 # Method 2: Try to find and call the entity directly via coordinator
                 if hasattr(coordinator, '_todo_entities') and kid in coordinator._todo_entities:
                     todo_entity = coordinator._todo_entities[kid]
                     _LOGGER.debug(f"SimpleChores: Found todo entity for {kid}, calling direct method")
                     from homeassistant.components.todo import TodoItem, TodoItemStatus
                     new_item = TodoItem(
-                        summary=title_with_points, 
+                        summary=title_with_points,
                         uid=todo_uid,
                         status=TodoItemStatus.NEEDS_ACTION
                     )
                     await todo_entity.async_create_item(new_item)
-                    _LOGGER.info(f"SimpleChores: Created todo item via direct entity method")
+                    _LOGGER.info("SimpleChores: Created todo item via direct entity method")
                 else:
                     _LOGGER.warning(f"SimpleChores: No todo entity found for kid {kid}")
-                
+
         except Exception as e:
             _LOGGER.warning(f"SimpleChores: Failed to create todo item: {e}")
             # Chore is still tracked via pending_chores, so this is not critical
@@ -120,7 +137,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _complete_chore(call: ServiceCall):
         data = call.data
         todo_uid = data.get("todo_uid") or data.get("chore_id")  # Support both names
-        
+
         if todo_uid:
             # Complete chore by UID (preferred method)
             success = await coordinator.complete_chore_by_uid(todo_uid)
@@ -145,27 +162,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = call.data
         kid = data["kid"]
         reward_id = data.get("reward_id")
-        
+
         await coordinator.ensure_kid(kid)
-        
+
         if reward_id:
             # Use reward system
             reward = coordinator.get_reward(reward_id)
             if not reward:
                 return
-            
+
             kid_points = coordinator.get_points(kid)
             if kid_points < reward.cost:
                 return  # Not enough points
-                
+
             await coordinator.remove_points(kid, reward.cost, f"Reward: {reward.title}", "spend")
-            
+
             # Create calendar event if enabled
             if reward.create_calendar_event:
                 parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
                 start_time = datetime.now()
                 end_time = start_time + timedelta(hours=reward.calendar_duration_hours)
-                
+
                 try:
                     await hass.services.async_call(
                         "calendar", "create_event",
@@ -190,7 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _log_parent_chore(call: ServiceCall):
         data = call.data
         parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
-        
+
         try:
             await hass.services.async_call(
                 "calendar", "create_event",
@@ -215,10 +232,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         points = int(data["points"])
         schedule_type = data["schedule_type"]
         day_of_week = data.get("day_of_week")
-        
+
         await coordinator.ensure_kid(kid)
         chore_id = await coordinator.create_recurring_chore(kid, title, points, schedule_type, day_of_week)
-        
+
         import logging
         _LOGGER = logging.getLogger(__name__)
         _LOGGER.info(f"SimpleChores: Created recurring chore {chore_id}: {title} for {kid}")
@@ -226,9 +243,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     async def _approve_chore(call: ServiceCall):
         data = call.data
         approval_id = data["approval_id"]
-        
+
         success = await coordinator.approve_chore(approval_id)
-        
+
         import logging
         _LOGGER = logging.getLogger(__name__)
         if success:
@@ -240,9 +257,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         data = call.data
         approval_id = data["approval_id"]
         reason = data.get("reason", "Did not meet standards")
-        
+
         success = await coordinator.reject_chore(approval_id, reason)
-        
+
         import logging
         _LOGGER = logging.getLogger(__name__)
         if success:
@@ -254,7 +271,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         """Generate daily and/or weekly recurring chores"""
         data = call.data
         schedule_type = data.get("schedule_type", "daily")
-        
+
         if schedule_type == "daily":
             await coordinator.generate_daily_chores()
         elif schedule_type == "weekly":
@@ -262,7 +279,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             current_day = datetime.now().weekday()  # 0=Monday, 6=Sunday
             target_day = data.get("day_of_week", current_day)
             await coordinator.generate_weekly_chores(target_day)
-        
+
         import logging
         _LOGGER = logging.getLogger(__name__)
         _LOGGER.info(f"SimpleChores: Generated {schedule_type} recurring chores")
@@ -273,14 +290,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Required("amount"): cv.positive_int,
         vol.Optional("reason", default="Manual adjust"): cv.string,
     })
-    
+
     create_adhoc_schema = vol.Schema({
         vol.Required("kid"): cv.string,
         vol.Required("title"): cv.string,
         vol.Required("points"): cv.positive_int,
         vol.Optional("due"): cv.datetime,
     })
-    
+
     complete_chore_schema = vol.Schema({
         vol.Optional("todo_uid"): cv.string,
         vol.Optional("chore_id"): cv.string,  # Alias for todo_uid
@@ -288,14 +305,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Optional("points"): cv.positive_int,
         vol.Optional("reason"): cv.string,
     })
-    
+
     claim_reward_schema = vol.Schema({
         vol.Required("kid"): cv.string,
         vol.Optional("reward_id"): cv.string,
         vol.Optional("cost"): cv.positive_int,
         vol.Optional("title"): cv.string,
     })
-    
+
     log_parent_chore_schema = vol.Schema({
         vol.Required("title"): cv.string,
         vol.Optional("description"): cv.string,
@@ -303,7 +320,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Optional("end"): cv.string,
         vol.Optional("all_day", default=False): cv.boolean,
     })
-    
+
     create_recurring_schema = vol.Schema({
         vol.Required("kid"): cv.string,
         vol.Required("title"): cv.string,
@@ -311,21 +328,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Required("schedule_type"): vol.In(["daily", "weekly"]),
         vol.Optional("day_of_week"): vol.In([0, 1, 2, 3, 4, 5, 6]),  # 0=Monday, 6=Sunday
     })
-    
+
     approve_chore_schema = vol.Schema({
         vol.Required("approval_id"): cv.string,
     })
-    
+
     reject_chore_schema = vol.Schema({
         vol.Required("approval_id"): cv.string,
         vol.Optional("reason", default="Did not meet standards"): cv.string,
     })
-    
+
     generate_recurring_schema = vol.Schema({
         vol.Optional("schedule_type", default="daily"): vol.In(["daily", "weekly"]),
         vol.Optional("day_of_week"): vol.In([0, 1, 2, 3, 4, 5, 6]),
     })
-    
+
     hass.services.async_register(DOMAIN, SERVICE_ADD_POINTS, _add_points, schema=add_points_schema)
     hass.services.async_register(DOMAIN, SERVICE_REMOVE_POINTS, _remove_points, schema=add_points_schema)
     hass.services.async_register(DOMAIN, SERVICE_CREATE_ADHOC, _create_adhoc, schema=create_adhoc_schema)

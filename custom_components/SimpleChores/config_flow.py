@@ -1,10 +1,14 @@
 """Config flow for SimpleChores integration."""
 from __future__ import annotations
+
 from typing import Any
-import voluptuous as vol
+
 from homeassistant import config_entries
 from homeassistant.core import callback
-from .const import DOMAIN, CONF_KIDS, CONF_USE_TODO, CONF_PARENTS_CALENDAR
+import voluptuous as vol
+
+from .const import CONF_KIDS, CONF_PARENTS_CALENDAR, CONF_USE_TODO, DOMAIN
+
 
 class SimpleChoresConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
@@ -13,7 +17,7 @@ class SimpleChoresConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Check for existing instance
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
-            
+
         errors = {}
         if user_input is not None:
             return self.async_create_entry(title="SimpleChores", data=user_input)

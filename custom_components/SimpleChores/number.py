@@ -1,11 +1,14 @@
 """Number entities for SimpleChores integration."""
 from __future__ import annotations
+
 from homeassistant.components.number import NumberEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+
 from .const import DOMAIN
 from .coordinator import SimpleChoresCoordinator
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entities: AddEntitiesCallback):
     coordinator: SimpleChoresCoordinator = hass.data[DOMAIN][entry.entry_id]
@@ -51,7 +54,7 @@ class SimpleChoresNumber(NumberEntity):
         self.async_write_ha_state()
         # Update all number entities for this kid
         self.async_schedule_update_ha_state(force_refresh=True)
-    
+
     async def async_update(self) -> None:
         """Called by Home Assistant to update the entity."""
         # Force refresh from coordinator

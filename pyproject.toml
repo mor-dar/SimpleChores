@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simplechores"
+version = "1.0.0"
+description = "Home Assistant custom integration for managing kids' chores, points, and rewards"
+authors = [
+    {name = "SimpleChores Contributors"}
+]
+dependencies = [
+    "homeassistant>=2024.1.0"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-homeassistant-custom-component>=0.13.0"
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "B",    # flake8-bugbear
+    "C",    # flake8-comprehensions
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "W",    # pycodestyle warnings
+]
+ignore = [
+    "S101",  # assert
+    "S603",  # subprocess-without-shell-equals-true
+    "PLR0913", # too-many-arguments
+    "PLR2004", # magic-value-comparison
+    "PLR0915", # too-many-statements
+    "C901",   # too-complex
+    "N999",   # invalid-module-name (HA convention)
+    "N806",   # non-lowercase-variable-in-function (HA _LOGGER convention)
+    "PLC0415", # import-outside-toplevel (HA service patterns)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",  # assert
+    "PLR2004", # magic-value-comparison  
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 25
+
+[tool.ruff.lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components.simplechores"]
+combine-as-imports = true
+split-on-trailing-comma = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--strict-config",
+    "--disable-warnings"
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+]
+asyncio_mode = "auto"
