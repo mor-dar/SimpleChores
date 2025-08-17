@@ -35,6 +35,32 @@ class PendingChore:
     title: str
     points: int
     created_ts: float
+    status: str = "pending"  # "pending" | "completed" | "approved" | "rejected"
+    completed_ts: Optional[float] = None
+    approved_ts: Optional[float] = None
+
+@dataclass
+class RecurringChore:
+    """Defines a recurring chore template"""
+    id: str
+    title: str
+    points: int
+    kid_id: str
+    schedule_type: str  # "daily" | "weekly"
+    day_of_week: Optional[int] = None  # 0=Monday, 6=Sunday (for weekly chores)
+    enabled: bool = True
+    created_ts: float = field(default_factory=lambda: datetime.now().timestamp())
+
+@dataclass
+class PendingApproval:
+    """Tracks chores waiting for parental approval"""
+    id: str
+    todo_uid: str
+    kid_id: str
+    title: str
+    points: int
+    completed_ts: float
+    status: str = "pending_approval"  # "pending_approval" | "approved" | "rejected"
 
 @dataclass
 class StorageModel:
@@ -42,3 +68,5 @@ class StorageModel:
     ledger: List[LedgerEntry] = field(default_factory=list)
     rewards: Dict[str, Reward] = field(default_factory=dict)
     pending_chores: Dict[str, PendingChore] = field(default_factory=dict)  # key: todo_uid
+    recurring_chores: Dict[str, RecurringChore] = field(default_factory=dict)  # key: chore_id
+    pending_approvals: Dict[str, PendingApproval] = field(default_factory=dict)  # key: approval_id

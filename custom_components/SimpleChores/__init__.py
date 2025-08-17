@@ -6,7 +6,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers.typing import ConfigType
 import homeassistant.helpers.config_validation as cv
-from .const import DOMAIN, PLATFORMS, SERVICE_ADD_POINTS, SERVICE_REMOVE_POINTS, SERVICE_CREATE_ADHOC, SERVICE_COMPLETE_CHORE, SERVICE_CLAIM_REWARD, SERVICE_LOG_PARENT_CHORE
+from .const import DOMAIN, PLATFORMS, SERVICE_ADD_POINTS, SERVICE_REMOVE_POINTS, SERVICE_CREATE_ADHOC, SERVICE_COMPLETE_CHORE, SERVICE_CLAIM_REWARD, SERVICE_LOG_PARENT_CHORE, SERVICE_CREATE_RECURRING, SERVICE_APPROVE_CHORE, SERVICE_REJECT_CHORE, SERVICE_GENERATE_RECURRING
 from .coordinator import SimpleChoresCoordinator
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -208,6 +208,65 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Calendar service failed - log error but don't fail
             pass
 
+    async def _create_recurring_chore(call: ServiceCall):
+        data = call.data
+        kid = data["kid"]
+        title = data["title"]
+        points = int(data["points"])
+        schedule_type = data["schedule_type"]
+        day_of_week = data.get("day_of_week")
+        
+        await coordinator.ensure_kid(kid)
+        chore_id = await coordinator.create_recurring_chore(kid, title, points, schedule_type, day_of_week)
+        
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.info(f"SimpleChores: Created recurring chore {chore_id}: {title} for {kid}")
+
+    async def _approve_chore(call: ServiceCall):
+        data = call.data
+        approval_id = data["approval_id"]
+        
+        success = await coordinator.approve_chore(approval_id)
+        
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        if success:
+            _LOGGER.info(f"SimpleChores: Approved chore {approval_id}")
+        else:
+            _LOGGER.warning(f"SimpleChores: Failed to approve chore {approval_id}")
+
+    async def _reject_chore(call: ServiceCall):
+        data = call.data
+        approval_id = data["approval_id"]
+        reason = data.get("reason", "Did not meet standards")
+        
+        success = await coordinator.reject_chore(approval_id, reason)
+        
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        if success:
+            _LOGGER.info(f"SimpleChores: Rejected chore {approval_id}: {reason}")
+        else:
+            _LOGGER.warning(f"SimpleChores: Failed to reject chore {approval_id}")
+
+    async def _generate_recurring_chores(call: ServiceCall):
+        """Generate daily and/or weekly recurring chores"""
+        data = call.data
+        schedule_type = data.get("schedule_type", "daily")
+        
+        if schedule_type == "daily":
+            await coordinator.generate_daily_chores()
+        elif schedule_type == "weekly":
+            from datetime import datetime
+            current_day = datetime.now().weekday()  # 0=Monday, 6=Sunday
+            target_day = data.get("day_of_week", current_day)
+            await coordinator.generate_weekly_chores(target_day)
+        
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        _LOGGER.info(f"SimpleChores: Generated {schedule_type} recurring chores")
+
     # Service schemas
     add_points_schema = vol.Schema({
         vol.Required("kid"): cv.string,
@@ -245,12 +304,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Optional("all_day", default=False): cv.boolean,
     })
     
+    create_recurring_schema = vol.Schema({
+        vol.Required("kid"): cv.string,
+        vol.Required("title"): cv.string,
+        vol.Required("points"): cv.positive_int,
+        vol.Required("schedule_type"): vol.In(["daily", "weekly"]),
+        vol.Optional("day_of_week"): vol.In([0, 1, 2, 3, 4, 5, 6]),  # 0=Monday, 6=Sunday
+    })
+    
+    approve_chore_schema = vol.Schema({
+        vol.Required("approval_id"): cv.string,
+    })
+    
+    reject_chore_schema = vol.Schema({
+        vol.Required("approval_id"): cv.string,
+        vol.Optional("reason", default="Did not meet standards"): cv.string,
+    })
+    
+    generate_recurring_schema = vol.Schema({
+        vol.Optional("schedule_type", default="daily"): vol.In(["daily", "weekly"]),
+        vol.Optional("day_of_week"): vol.In([0, 1, 2, 3, 4, 5, 6]),
+    })
+    
     hass.services.async_register(DOMAIN, SERVICE_ADD_POINTS, _add_points, schema=add_points_schema)
     hass.services.async_register(DOMAIN, SERVICE_REMOVE_POINTS, _remove_points, schema=add_points_schema)
     hass.services.async_register(DOMAIN, SERVICE_CREATE_ADHOC, _create_adhoc, schema=create_adhoc_schema)
     hass.services.async_register(DOMAIN, SERVICE_COMPLETE_CHORE, _complete_chore, schema=complete_chore_schema)
     hass.services.async_register(DOMAIN, SERVICE_CLAIM_REWARD, _claim_reward, schema=claim_reward_schema)
     hass.services.async_register(DOMAIN, SERVICE_LOG_PARENT_CHORE, _log_parent_chore, schema=log_parent_chore_schema)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_RECURRING, _create_recurring_chore, schema=create_recurring_schema)
+    hass.services.async_register(DOMAIN, SERVICE_APPROVE_CHORE, _approve_chore, schema=approve_chore_schema)
+    hass.services.async_register(DOMAIN, SERVICE_REJECT_CHORE, _reject_chore, schema=reject_chore_schema)
+    hass.services.async_register(DOMAIN, SERVICE_GENERATE_RECURRING, _generate_recurring_chores, schema=generate_recurring_schema)
 
     return True
 
@@ -266,4 +351,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.services.async_remove(DOMAIN, SERVICE_COMPLETE_CHORE)
             hass.services.async_remove(DOMAIN, SERVICE_CLAIM_REWARD)
             hass.services.async_remove(DOMAIN, SERVICE_LOG_PARENT_CHORE)
+            hass.services.async_remove(DOMAIN, SERVICE_CREATE_RECURRING)
+            hass.services.async_remove(DOMAIN, SERVICE_APPROVE_CHORE)
+            hass.services.async_remove(DOMAIN, SERVICE_REJECT_CHORE)
+            hass.services.async_remove(DOMAIN, SERVICE_GENERATE_RECURRING)
     return unload_ok

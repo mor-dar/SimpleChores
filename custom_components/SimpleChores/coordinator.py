@@ -5,7 +5,7 @@ import uuid
 from typing import List
 from homeassistant.core import HomeAssistant
 from .storage import SimpleChoresStore
-from .models import StorageModel, LedgerEntry, Kid, Reward, PendingChore
+from .models import StorageModel, LedgerEntry, Kid, Reward, PendingChore, RecurringChore, PendingApproval
 
 class SimpleChoresCoordinator:
     def __init__(self, hass: HomeAssistant):
@@ -139,3 +139,154 @@ class SimpleChoresCoordinator:
             await self.hass.services.async_call("homeassistant", "update_entity", {"entity_id": entity_id}, blocking=False)
         except Exception as e:
             _LOGGER.debug(f"SimpleChores: Fallback update failed: {e}")
+
+    # ---- recurring chores ----
+    async def create_recurring_chore(self, kid_id: str, title: str, points: int, schedule_type: str, day_of_week: int = None) -> str:
+        """Create a recurring chore template"""
+        assert self.model
+        chore_id = str(uuid.uuid4())[:8]
+        
+        recurring_chore = RecurringChore(
+            id=chore_id,
+            title=title,
+            points=points,
+            kid_id=kid_id,
+            schedule_type=schedule_type,
+            day_of_week=day_of_week,
+            enabled=True
+        )
+        
+        self.model.recurring_chores[chore_id] = recurring_chore
+        await self.async_save()
+        return chore_id
+
+    def get_recurring_chores(self, kid_id: str = None) -> List[RecurringChore]:
+        """Get recurring chores, optionally filtered by kid"""
+        chores = list(self.model.recurring_chores.values())
+        if kid_id:
+            chores = [c for c in chores if c.kid_id == kid_id]
+        return chores
+
+    async def generate_daily_chores(self):
+        """Generate daily recurring chores"""
+        for chore in self.model.recurring_chores.values():
+            if chore.enabled and chore.schedule_type == "daily":
+                # Create a new todo item for this chore
+                todo_uid = await self.create_pending_chore(chore.kid_id, chore.title, chore.points)
+                # Also create in todo list if available
+                if hasattr(self, '_todo_entities') and chore.kid_id in self._todo_entities:
+                    from homeassistant.components.todo import TodoItem, TodoItemStatus
+                    todo_entity = self._todo_entities[chore.kid_id]
+                    new_item = TodoItem(
+                        summary=f"{chore.title} (+{chore.points})",
+                        uid=todo_uid,
+                        status=TodoItemStatus.NEEDS_ACTION
+                    )
+                    await todo_entity.async_create_item(new_item)
+
+    async def generate_weekly_chores(self, target_day: int):
+        """Generate weekly recurring chores for specific day (0=Monday, 6=Sunday)"""
+        for chore in self.model.recurring_chores.values():
+            if chore.enabled and chore.schedule_type == "weekly" and chore.day_of_week == target_day:
+                # Create a new todo item for this chore
+                todo_uid = await self.create_pending_chore(chore.kid_id, chore.title, chore.points)
+                # Also create in todo list if available
+                if hasattr(self, '_todo_entities') and chore.kid_id in self._todo_entities:
+                    from homeassistant.components.todo import TodoItem, TodoItemStatus
+                    todo_entity = self._todo_entities[chore.kid_id]
+                    new_item = TodoItem(
+                        summary=f"{chore.title} (+{chore.points})",
+                        uid=todo_uid,
+                        status=TodoItemStatus.NEEDS_ACTION
+                    )
+                    await todo_entity.async_create_item(new_item)
+
+    # ---- parental approval ----
+    async def request_approval(self, todo_uid: str) -> str:
+        """Move a completed chore to pending approval state"""
+        assert self.model
+        
+        if todo_uid in self.model.pending_chores:
+            chore = self.model.pending_chores[todo_uid]
+            approval_id = str(uuid.uuid4())[:8]
+            
+            # Create approval request
+            approval = PendingApproval(
+                id=approval_id,
+                todo_uid=todo_uid,
+                kid_id=chore.kid_id,
+                title=chore.title,
+                points=chore.points,
+                completed_ts=datetime.now().timestamp()
+            )
+            
+            # Update chore status
+            chore.status = "completed"
+            chore.completed_ts = datetime.now().timestamp()
+            
+            self.model.pending_approvals[approval_id] = approval
+            await self.async_save()
+            
+            # Update approval buttons
+            await self._update_approval_buttons()
+            
+            return approval_id
+        return None
+
+    async def approve_chore(self, approval_id: str) -> bool:
+        """Approve a pending chore and award points"""
+        assert self.model
+        
+        if approval_id in self.model.pending_approvals:
+            approval = self.model.pending_approvals[approval_id]
+            
+            # Award points
+            await self.add_points(approval.kid_id, approval.points, f"Approved: {approval.title}", "earn")
+            
+            # Update approval status
+            approval.status = "approved"
+            
+            # Update original chore status
+            if approval.todo_uid in self.model.pending_chores:
+                self.model.pending_chores[approval.todo_uid].status = "approved"
+                self.model.pending_chores[approval.todo_uid].approved_ts = datetime.now().timestamp()
+            
+            await self.async_save()
+            return True
+        return False
+
+    async def reject_chore(self, approval_id: str, reason: str = "Did not meet standards") -> bool:
+        """Reject a pending chore"""
+        assert self.model
+        
+        if approval_id in self.model.pending_approvals:
+            approval = self.model.pending_approvals[approval_id]
+            
+            # Update approval status
+            approval.status = "rejected"
+            
+            # Update original chore status
+            if approval.todo_uid in self.model.pending_chores:
+                self.model.pending_chores[approval.todo_uid].status = "rejected"
+            
+            await self.async_save()
+            
+            # Update approval buttons
+            await self._update_approval_buttons()
+            
+            return True
+        return False
+
+    async def _update_approval_buttons(self):
+        """Trigger updates for approval status buttons and sensors"""
+        if hasattr(self, '_approval_buttons'):
+            for button in self._approval_buttons:
+                button.async_write_ha_state()
+        
+        if hasattr(self, '_approval_sensors'):
+            for sensor in self._approval_sensors:
+                sensor.async_write_ha_state()
+
+    def get_pending_approvals(self) -> List[PendingApproval]:
+        """Get all pending approval requests"""
+        return [a for a in self.model.pending_approvals.values() if a.status == "pending_approval"]
