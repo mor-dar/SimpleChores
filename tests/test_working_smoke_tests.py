@@ -36,6 +36,11 @@ class TestWorkingTodoWorkflows:
         coordinator.get_pending_approvals = Mock(return_value={})
         coordinator.async_save = AsyncMock()
         coordinator._update_approval_buttons = AsyncMock()
+        
+        # Add new persistence methods
+        coordinator.get_todo_items_for_kid = Mock(return_value=[])
+        coordinator.save_todo_item = AsyncMock()
+        coordinator.remove_todo_item = AsyncMock()
 
         return coordinator
 
@@ -43,14 +48,41 @@ class TestWorkingTodoWorkflows:
     async def test_basic_todo_item_lifecycle(self, mock_coordinator):
         """Test basic todo item creation and access."""
         todo_list = KidTodoList(mock_coordinator, "alice")
+        
+        # Mock the entity's hass and state writing methods
+        todo_list.hass = Mock()
+        todo_list.async_write_ha_state = Mock()
+        todo_list.async_schedule_update_ha_state = Mock()
+        
+        # Simulate entity being added to Home Assistant (which restores items)
+        await todo_list.async_added_to_hass()
 
-        # Should have the test item from __init__
+        # Should start with no items (empty coordinator)
         items = todo_list.todo_items
-        assert len(items) >= 1
+        assert len(items) == 0
+
+        # Create a new todo item
+        from homeassistant.components.todo import TodoItem, TodoItemStatus
+        import uuid
+        test_item = TodoItem(
+            summary="Test chore for persistence",
+            uid=str(uuid.uuid4()),
+            status=TodoItemStatus.NEEDS_ACTION
+        )
+        await todo_list.async_create_item(test_item)
+        
+        # Should now have 1 item
+        items = todo_list.todo_items
+        assert len(items) == 1
 
         # Test async_get_items method
         async_items = await todo_list.async_get_items()
-        assert len(async_items) >= 1
+        assert len(async_items) == 1
+        
+        # Verify persistence method was called
+        mock_coordinator.save_todo_item.assert_called_once_with(
+            test_item.uid, test_item.summary, "needs_action", "alice"
+        )
 
     @pytest.mark.asyncio
     async def test_todo_item_update_with_approval_request(self, mock_coordinator):

@@ -64,6 +64,15 @@ class PendingApproval:
     status: str = "pending_approval"  # "pending_approval" | "approved" | "rejected"
 
 @dataclass
+class TodoItemModel:
+    """Serializable representation of a TodoItem for storage"""
+    uid: str
+    summary: str
+    status: str  # "needs_action" | "completed"
+    kid_id: str  # Which kid this todo item belongs to
+    created_ts: float = field(default_factory=lambda: datetime.now().timestamp())
+
+@dataclass
 class StorageModel:
     kids: dict[str, Kid] = field(default_factory=dict)
     ledger: list[LedgerEntry] = field(default_factory=list)
@@ -71,3 +80,4 @@ class StorageModel:
     pending_chores: dict[str, PendingChore] = field(default_factory=dict)  # key: todo_uid
     recurring_chores: dict[str, RecurringChore] = field(default_factory=dict)  # key: chore_id
     pending_approvals: dict[str, PendingApproval] = field(default_factory=dict)  # key: approval_id
+    todo_items: list[TodoItemModel] = field(default_factory=list)  # persistent todo items

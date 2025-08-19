@@ -6,7 +6,7 @@ import uuid
 
 from homeassistant.core import HomeAssistant
 
-from .models import Kid, LedgerEntry, PendingApproval, PendingChore, RecurringChore, Reward, StorageModel
+from .models import Kid, LedgerEntry, PendingApproval, PendingChore, RecurringChore, Reward, StorageModel, TodoItemModel
 from .storage import SimpleChoresStore
 
 
@@ -293,3 +293,42 @@ class SimpleChoresCoordinator:
     def get_pending_approvals(self) -> list[PendingApproval]:
         """Get all pending approval requests"""
         return [a for a in self.model.pending_approvals.values() if a.status == "pending_approval"]
+
+    # ---- persistent todo items ----
+    async def save_todo_item(self, uid: str, summary: str, status: str, kid_id: str) -> None:
+        """Save a todo item to persistent storage"""
+        assert self.model
+        
+        # Remove existing item with same UID
+        self.model.todo_items = [item for item in self.model.todo_items if item.uid != uid]
+        
+        # Add new/updated item
+        todo_item = TodoItemModel(
+            uid=uid,
+            summary=summary,
+            status=status,
+            kid_id=kid_id
+        )
+        self.model.todo_items.append(todo_item)
+        await self.async_save()
+
+    async def remove_todo_item(self, uid: str) -> None:
+        """Remove a todo item from persistent storage"""
+        assert self.model
+        self.model.todo_items = [item for item in self.model.todo_items if item.uid != uid]
+        await self.async_save()
+
+    def get_todo_items_for_kid(self, kid_id: str) -> list[TodoItemModel]:
+        """Get all stored todo items for a specific kid"""
+        if not self.model:
+            return []
+        return [item for item in self.model.todo_items if item.kid_id == kid_id]
+
+    def get_todo_item(self, uid: str) -> TodoItemModel | None:
+        """Get a specific todo item by UID"""
+        if not self.model:
+            return None
+        for item in self.model.todo_items:
+            if item.uid == uid:
+                return item
+        return None

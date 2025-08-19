@@ -41,14 +41,33 @@ class KidTodoList(TodoListEntity):
             coord._todo_entities = {}
         coord._todo_entities[kid_id] = self
 
-        # Add a test item to verify the todo list is working
-        import uuid
-        test_item = TodoItem(
-            summary="Test chore - check if todo list works",
-            uid=str(uuid.uuid4()),
-            status=TodoItemStatus.NEEDS_ACTION
-        )
-        self._items.append(test_item)
+    async def async_added_to_hass(self):
+        """Called when entity is added to Home Assistant."""
+        await super().async_added_to_hass()
+        # Restore todo items from persistent storage
+        await self._restore_todo_items()
+
+    async def _restore_todo_items(self):
+        """Restore todo items from coordinator storage"""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        stored_items = self._coord.get_todo_items_for_kid(self._kid_id)
+        _LOGGER.info(f"SimpleChores: Restoring {len(stored_items)} todo items for {self._kid_id}")
+        
+        self._items = []
+        for stored_item in stored_items:
+            # Convert stored status back to enum
+            status = TodoItemStatus.COMPLETED if stored_item.status == "completed" else TodoItemStatus.NEEDS_ACTION
+            
+            todo_item = TodoItem(
+                summary=stored_item.summary,
+                uid=stored_item.uid,
+                status=status
+            )
+            self._items.append(todo_item)
+            
+        _LOGGER.info(f"SimpleChores: Restored {len(self._items)} todo items for {self._kid_id}")
 
     async def async_get_items(self):
         """Get todo items - called by Home Assistant."""
@@ -86,8 +105,14 @@ class KidTodoList(TodoListEntity):
                 status=getattr(item, 'status', None) or TodoItemStatus.NEEDS_ACTION
             )
             self._items.append(fixed_item)
+            item = fixed_item
         else:
             self._items.append(item)
+            
+        # Save to persistent storage
+        status_str = "completed" if item.status == TodoItemStatus.COMPLETED else "needs_action"
+        await self._coord.save_todo_item(item.uid, item.summary, status_str, self._kid_id)
+        
         # Force state update
         self.async_write_ha_state()
         # Also schedule an update
@@ -201,6 +226,11 @@ class KidTodoList(TodoListEntity):
                 # Update the item in the list after all modifications
                 self._items[i] = item
                 break
+                
+        # Save updated todo items to persistent storage
+        status_str = "completed" if item.status == TodoItemStatus.COMPLETED else "needs_action"
+        await self._coord.save_todo_item(item.uid, item.summary, status_str, self._kid_id)
+        
         self.async_write_ha_state()
 
     async def async_update_todo_item(self, item: TodoItem) -> None:
@@ -262,6 +292,9 @@ class KidTodoList(TodoListEntity):
             # Update approval buttons if any approvals were removed
             if approvals_to_remove:
                 await self._coord._update_approval_buttons()
+
+        # Remove from persistent todo storage
+        await self._coord.remove_todo_item(uid)
 
         self.async_write_ha_state()
 
