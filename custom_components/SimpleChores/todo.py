@@ -166,7 +166,9 @@ class KidTodoList(TodoListEntity):
                         # Reset status back to needs action to show pending state
                         item.status = TodoItemStatus.NEEDS_ACTION
                         self._items[i] = item
-                        continue
+                        handled_approval_logic = True  # Mark as handled so we save this change
+                        _LOGGER.info(f"SimpleChores: FORCED STATUS RESET - Item status reset to NEEDS_ACTION to stop HA completion loop")
+                        break  # Exit the loop to save the status change
 
                     # Check if this is a tracked chore that needs approval
                     if item.uid in self._coord.model.pending_chores:
@@ -218,10 +220,12 @@ class KidTodoList(TodoListEntity):
                             handled_approval_logic = True
 
                 # Handle removing pending approval status (unchecking or de-selecting)
-                # Case 1: Unchecking - transitioning from completed to needs_action
+                # Case 1: Unchecking - transitioning from completed to needs_action  
                 # Case 2: De-selecting - user manually removed the [PENDING APPROVAL] tag
+                # Case 3: User manually edited summary to remove [PENDING APPROVAL] tag
                 elif (item.status == TodoItemStatus.NEEDS_ACTION and 
-                      ("[PENDING APPROVAL]" in item.summary or "[PENDING APPROVAL]" in old.summary)):
+                      ("[PENDING APPROVAL]" in item.summary or "[PENDING APPROVAL]" in old.summary)) or \
+                     ("[PENDING APPROVAL]" in old.summary and "[PENDING APPROVAL]" not in item.summary):
                     
                     _LOGGER.info(f"SimpleChores: DESELECT LOGIC TRIGGERED - old_status={old.status}, new_status={item.status}")
                     _LOGGER.info(f"SimpleChores: DESELECT LOGIC - old_summary='{old.summary}'")
@@ -246,6 +250,12 @@ class KidTodoList(TodoListEntity):
                           "[PENDING APPROVAL]" not in item.summary):
                         should_clear_approval = True
                         log_message = f"CASE 2: De-selecting pending item by tag removal: {old.summary} -> {item.summary}"
+                        _LOGGER.info(f"SimpleChores: {log_message}")
+                    
+                    # Case 3: User manually removed [PENDING APPROVAL] tag from summary
+                    elif ("[PENDING APPROVAL]" in old.summary and "[PENDING APPROVAL]" not in item.summary):
+                        should_clear_approval = True
+                        log_message = f"CASE 3: Manual tag removal detected: {old.summary} -> {item.summary}"
                         _LOGGER.info(f"SimpleChores: {log_message}")
                     
                     if should_clear_approval:
