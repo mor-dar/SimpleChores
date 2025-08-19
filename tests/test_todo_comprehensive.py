@@ -954,6 +954,7 @@ class TestTodoItemUncheckingBehavior:
 
         coordinator.async_save = AsyncMock()
         coordinator._update_approval_buttons = AsyncMock()
+        coordinator.save_todo_item = AsyncMock()
 
         # Simulate that normal item was previously completed
         todo_list._items[2].status = TodoItemStatus.COMPLETED

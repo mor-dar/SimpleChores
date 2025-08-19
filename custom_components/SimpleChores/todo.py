@@ -131,6 +131,7 @@ class KidTodoList(TodoListEntity):
         _LOGGER = logging.getLogger(__name__)
         _LOGGER.debug(f"SimpleChores: Updating todo item: {item}")
 
+        handled_approval_logic = False
         for i, old in enumerate(self._items):
             if old.uid == item.uid:
                 _LOGGER.debug(
@@ -157,6 +158,7 @@ class KidTodoList(TodoListEntity):
                             item.summary = f"[PENDING APPROVAL] {item.summary}"
                             item.status = TodoItemStatus.NEEDS_ACTION  # Reset to uncompleted
                             _LOGGER.info(f"SimpleChores: Chore moved to approval queue: {approval_id}")
+                            handled_approval_logic = True
                     else:
                         # Fallback: try to parse "(+X)" from summary for manual chores
                         # These also go through approval workflow
@@ -194,15 +196,34 @@ class KidTodoList(TodoListEntity):
                             # Debug: Check pending approvals
                             pending_count = len(self._coord.get_pending_approvals())
                             _LOGGER.info(f"SimpleChores: Total pending approvals after creation: {pending_count}")
+                            handled_approval_logic = True
 
-                # Handle unchecking pending approval items (undo functionality)
-                elif item.status == TodoItemStatus.NEEDS_ACTION and old.status == TodoItemStatus.COMPLETED:
-                    if "[PENDING APPROVAL]" in item.summary:
-                        _LOGGER.info(f"SimpleChores: Unchecking pending approval item: {item.summary}")
-
+                # Handle removing pending approval status (unchecking or de-selecting)
+                # Case 1: Unchecking - transitioning from completed to needs_action
+                # Case 2: De-selecting - user manually removed the [PENDING APPROVAL] tag
+                elif (item.status == TodoItemStatus.NEEDS_ACTION and 
+                      ("[PENDING APPROVAL]" in item.summary or "[PENDING APPROVAL]" in old.summary)):
+                    
+                    should_clear_approval = False
+                    log_message = ""
+                    
+                    # Case 1: Unchecking a completed item with pending approval
+                    if old.status == TodoItemStatus.COMPLETED and "[PENDING APPROVAL]" in item.summary:
+                        should_clear_approval = True
+                        log_message = f"Unchecking pending approval item: {item.summary}"
                         # Remove the pending approval tag
                         item.summary = item.summary.replace("[PENDING APPROVAL] ", "")
-
+                    
+                    # Case 2: De-selecting by removing the tag (no status change)
+                    elif (old.status == TodoItemStatus.NEEDS_ACTION and 
+                          "[PENDING APPROVAL]" in old.summary and 
+                          "[PENDING APPROVAL]" not in item.summary):
+                        should_clear_approval = True
+                        log_message = f"De-selecting pending item by tag removal: {old.summary} -> {item.summary}"
+                    
+                    if should_clear_approval:
+                        _LOGGER.info(f"SimpleChores: {log_message}")
+                        
                         # Remove from pending approvals
                         approvals_to_remove = []
                         for approval_id, approval in self._coord.model.pending_approvals.items():
@@ -218,10 +239,12 @@ class KidTodoList(TodoListEntity):
                             self._coord.model.pending_chores[item.uid].status = "pending"
                             self._coord.model.pending_chores[item.uid].completed_ts = None
 
+                        # Always save and update UI when clearing approval state
                         await self._coord.async_save()
                         await self._coord._update_approval_buttons()
 
-                        _LOGGER.info(f"SimpleChores: Undid pending approval for: {item.summary}")
+                        _LOGGER.info(f"SimpleChores: Cleared pending approval for item: {item.summary}")
+                        handled_approval_logic = True
 
                 # Update the item in the list after all modifications
                 self._items[i] = item
@@ -229,7 +252,9 @@ class KidTodoList(TodoListEntity):
                 
         # Save updated todo items to persistent storage
         status_str = "completed" if item.status == TodoItemStatus.COMPLETED else "needs_action"
-        await self._coord.save_todo_item(item.uid, item.summary, status_str, self._kid_id)
+        # Save todo item changes, skip coordinator save if approval logic already handled it
+        skip_save = handled_approval_logic
+        await self._coord.save_todo_item(item.uid, item.summary, status_str, self._kid_id, skip_save=skip_save)
         
         self.async_write_ha_state()
 

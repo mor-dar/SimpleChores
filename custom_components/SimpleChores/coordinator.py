@@ -295,7 +295,7 @@ class SimpleChoresCoordinator:
         return [a for a in self.model.pending_approvals.values() if a.status == "pending_approval"]
 
     # ---- persistent todo items ----
-    async def save_todo_item(self, uid: str, summary: str, status: str, kid_id: str) -> None:
+    async def save_todo_item(self, uid: str, summary: str, status: str, kid_id: str, skip_save: bool = False) -> None:
         """Save a todo item to persistent storage"""
         assert self.model
         
@@ -310,7 +310,8 @@ class SimpleChoresCoordinator:
             kid_id=kid_id
         )
         self.model.todo_items.append(todo_item)
-        await self.async_save()
+        if not skip_save:
+            await self.async_save()
 
     async def remove_todo_item(self, uid: str) -> None:
         """Remove a todo item from persistent storage"""
