@@ -60,8 +60,27 @@ class KidTodoList(TodoListEntity):
             # Convert stored status back to enum
             status = TodoItemStatus.COMPLETED if stored_item.status == "completed" else TodoItemStatus.NEEDS_ACTION
             
+            # Defensive cleanup: Remove orphaned [PENDING APPROVAL] tags during restore
+            summary = stored_item.summary
+            if "[PENDING APPROVAL]" in summary:
+                # Check if this item has corresponding approval data
+                has_approval = any(
+                    approval.todo_uid == stored_item.uid and approval.status == "pending_approval"
+                    for approval in self._coord.model.pending_approvals.values()
+                )
+                
+                if not has_approval:
+                    # Remove orphaned [PENDING APPROVAL] tag
+                    original_summary = summary
+                    summary = summary.replace("[PENDING APPROVAL] ", "")
+                    _LOGGER.info(f"SimpleChores: Cleaned up orphaned [PENDING APPROVAL] tag during restore: '{original_summary}' -> '{summary}'")
+                    
+                    # Update the stored item to prevent this issue from persisting
+                    stored_item.summary = summary
+                    await self._coord.save_todo_item(stored_item.uid, summary, stored_item.status, self._kid_id)
+            
             todo_item = TodoItem(
-                summary=stored_item.summary,
+                summary=summary,
                 uid=stored_item.uid,
                 status=status
             )
@@ -204,22 +223,30 @@ class KidTodoList(TodoListEntity):
                 elif (item.status == TodoItemStatus.NEEDS_ACTION and 
                       ("[PENDING APPROVAL]" in item.summary or "[PENDING APPROVAL]" in old.summary)):
                     
+                    _LOGGER.info(f"SimpleChores: DESELECT LOGIC TRIGGERED - old_status={old.status}, new_status={item.status}")
+                    _LOGGER.info(f"SimpleChores: DESELECT LOGIC - old_summary='{old.summary}'")
+                    _LOGGER.info(f"SimpleChores: DESELECT LOGIC - new_summary='{item.summary}'")
+                    
                     should_clear_approval = False
                     log_message = ""
                     
                     # Case 1: Unchecking a completed item with pending approval
                     if old.status == TodoItemStatus.COMPLETED and "[PENDING APPROVAL]" in item.summary:
                         should_clear_approval = True
-                        log_message = f"Unchecking pending approval item: {item.summary}"
+                        log_message = f"CASE 1: Unchecking pending approval item: {item.summary}"
+                        _LOGGER.info(f"SimpleChores: {log_message}")
                         # Remove the pending approval tag
+                        original_summary = item.summary
                         item.summary = item.summary.replace("[PENDING APPROVAL] ", "")
+                        _LOGGER.info(f"SimpleChores: TAG REMOVED - '{original_summary}' -> '{item.summary}'")
                     
                     # Case 2: De-selecting by removing the tag (no status change)
                     elif (old.status == TodoItemStatus.NEEDS_ACTION and 
                           "[PENDING APPROVAL]" in old.summary and 
                           "[PENDING APPROVAL]" not in item.summary):
                         should_clear_approval = True
-                        log_message = f"De-selecting pending item by tag removal: {old.summary} -> {item.summary}"
+                        log_message = f"CASE 2: De-selecting pending item by tag removal: {old.summary} -> {item.summary}"
+                        _LOGGER.info(f"SimpleChores: {log_message}")
                     
                     if should_clear_approval:
                         _LOGGER.info(f"SimpleChores: {log_message}")
@@ -250,6 +277,27 @@ class KidTodoList(TodoListEntity):
                 self._items[i] = item
                 break
                 
+        # Additional defensive check: Clean up orphaned [PENDING APPROVAL] tags before saving
+        if "[PENDING APPROVAL]" in item.summary and item.status == TodoItemStatus.NEEDS_ACTION:
+            _LOGGER.info(f"SimpleChores: DEFENSIVE CHECK - Found [PENDING APPROVAL] tag on NEEDS_ACTION item: '{item.summary}'")
+            # Check if this item actually has pending approval data
+            has_approval = any(
+                approval.todo_uid == item.uid and approval.status == "pending_approval"
+                for approval in self._coord.model.pending_approvals.values()
+            )
+            
+            _LOGGER.info(f"SimpleChores: DEFENSIVE CHECK - Has corresponding approval data: {has_approval}")
+            if not has_approval:
+                original_summary = item.summary
+                _LOGGER.info(f"SimpleChores: DEFENSIVE CLEANUP - Removing orphaned [PENDING APPROVAL] tag: '{original_summary}'")
+                item.summary = item.summary.replace("[PENDING APPROVAL] ", "")
+                _LOGGER.info(f"SimpleChores: DEFENSIVE CLEANUP - After cleanup: '{item.summary}'")
+                # Update the item in our list too
+                for i, list_item in enumerate(self._items):
+                    if list_item.uid == item.uid:
+                        self._items[i] = item
+                        break
+        
         # Save updated todo items to persistent storage
         status_str = "completed" if item.status == TodoItemStatus.COMPLETED else "needs_action"
         # Save todo item changes, skip coordinator save if approval logic already handled it
@@ -262,25 +310,43 @@ class KidTodoList(TodoListEntity):
         """Update a todo item - this is the method Home Assistant calls."""
         import logging
         _LOGGER = logging.getLogger(__name__)
-        _LOGGER.debug(f"SimpleChores: async_update_todo_item called with: {item}")
-        _LOGGER.debug(f"SimpleChores: Item type: {type(item)}")
-        _LOGGER.debug(f"SimpleChores: Item attributes: {dir(item) if item else 'None'}")
+        _LOGGER.info(f"SimpleChores: ===== HOME ASSISTANT TODO UPDATE CALLED =====")
+        _LOGGER.info(f"SimpleChores: HA UPDATE - Item: {item}")
+        _LOGGER.info(f"SimpleChores: HA UPDATE - Type: {type(item)}")
 
         if item is None:
             _LOGGER.error("SimpleChores: Received None item in async_update_todo_item")
             return
 
         try:
-            # Log all item properties for debugging
-            _LOGGER.debug(f"SimpleChores: Item UID: {getattr(item, 'uid', 'NO_UID')}")
-            _LOGGER.debug(f"SimpleChores: Item summary: {getattr(item, 'summary', 'NO_SUMMARY')}")
-            _LOGGER.debug(f"SimpleChores: Item status: {getattr(item, 'status', 'NO_STATUS')}")
+            # Log all item properties for debugging  
+            _LOGGER.info(f"SimpleChores: HA UPDATE - UID: {getattr(item, 'uid', 'NO_UID')}")
+            _LOGGER.info(f"SimpleChores: HA UPDATE - Summary: '{getattr(item, 'summary', 'NO_SUMMARY')}'")
+            _LOGGER.info(f"SimpleChores: HA UPDATE - Status: {getattr(item, 'status', 'NO_STATUS')}")
+            
+            # Find the current item in our list to see what changed
+            current_item = None
+            for list_item in self._items:
+                if list_item.uid == item.uid:
+                    current_item = list_item
+                    break
+            
+            if current_item:
+                _LOGGER.info(f"SimpleChores: HA UPDATE - Current item summary: '{current_item.summary}'")
+                _LOGGER.info(f"SimpleChores: HA UPDATE - Current item status: {current_item.status}")
+                _LOGGER.info(f"SimpleChores: HA UPDATE - Status changed: {current_item.status} -> {item.status}")
+                _LOGGER.info(f"SimpleChores: HA UPDATE - Summary changed: '{current_item.summary}' -> '{item.summary}'")
+            else:
+                _LOGGER.info(f"SimpleChores: HA UPDATE - Item not found in current list (new item?)")
+                
+            _LOGGER.info(f"SimpleChores: HA UPDATE - About to call async_update_item...")
 
             if not hasattr(item, 'uid') or item.uid is None:
                 _LOGGER.error(f"SimpleChores: Item missing UID: {item}")
                 return
 
             await self.async_update_item(item)
+            _LOGGER.info(f"SimpleChores: HA UPDATE - async_update_item completed successfully")
         except Exception as e:
             _LOGGER.error(f"SimpleChores: Error in async_update_todo_item: {e}")
             import traceback
