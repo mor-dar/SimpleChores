@@ -5,3 +5,4 @@
 - When de-selecting a pending chore, it should be removed from pending status (similar to a parent rejecting it).
 - How are pending chores approved?  Can you give me an example dashboard item for selection and approval of a pending chore?
 - On home assistant restart the chores seem to be reset, this is an issue.  Can we make them persist between restarts?
+- Add HACS icon
