@@ -37,13 +37,30 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 
 ## 📦 Installation
 
-1. Copy this repository into `config/custom_components/simplechores/`.
-2. Restart Home Assistant.
-3. Go to **Settings → Devices & Services → Add Integration → simplechores**.
-4. Follow the config flow to:
-   - Add children’s names.
-   - Pick whether to use Local To-do lists.
-   - Select a calendar for parents’ chores (Local or Google, RW enabled).
+### Option 1: HACS (Recommended)
+
+1. Make sure you have [HACS](https://hacs.xyz/) installed
+2. In HACS, go to **Integrations**
+3. Click the **⋮** menu → **Custom repositories**
+4. Add this repository URL: `https://github.com/mor-dar/SimpleChores`
+5. Select **Integration** as the category
+6. Click **Add**
+7. Find "SimpleChores" in HACS and click **Download**
+8. Restart Home Assistant
+9. Go to **Settings → Devices & Services → Add Integration → SimpleChores**
+
+### Option 2: Manual Installation
+
+1. Copy this repository into `config/custom_components/simplechores/`
+2. Restart Home Assistant
+3. Go to **Settings → Devices & Services → Add Integration → SimpleChores**
+
+### Configuration
+
+After installation, follow the config flow to:
+- Add children's names
+- Pick whether to use Local To-do lists
+- Select a calendar for parents' chores (Local or Google, RW enabled)
 
 ---
 
@@ -202,6 +219,32 @@ Scaffold created with [cookiecutter-homeassistant-custom-component](https://gith
 - [ ] **Mobile-friendly dashboard pack** (Mushroom UI optional)
 - [ ] **Import tool** for KidsChores users
 - [ ] **Advanced rewards** (badges, streaks, achievements – optional add-on)
+
+---
+
+## 🔄 Updates & HACS Benefits
+
+### For Users
+- **Automatic updates**: Get notified when new versions are available
+- **One-click installation**: No manual file copying required
+- **Easy uninstall**: Remove cleanly through HACS interface
+- **Version management**: Easily downgrade if needed
+
+### For Development
+This integration is HACS-ready, which provides several development benefits:
+- **Faster iteration**: Most changes don't require Home Assistant restart
+- **Integration reload**: Use `Developer Tools → YAML → Reload` for many changes
+- **Service updates**: New services and entity changes load without restart
+- **Better debugging**: Keep HA running while testing changes
+
+### Reload Without Restart
+After updating via HACS, you can often reload just the integration:
+```yaml
+# In Developer Tools → Services
+service: homeassistant.reload_config_entry
+data:
+  entry_id: "your_simplechores_entry_id"
+```
 
 ---
 
