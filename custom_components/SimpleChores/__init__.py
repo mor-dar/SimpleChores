@@ -1,13 +1,19 @@
 """The SimpleChores integration."""
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
+import logging
+from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError, ServiceNotFound
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
+
+_LOGGER = logging.getLogger(__name__)
 
 from .const import (
     DOMAIN,
@@ -31,258 +37,420 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    coordinator = SimpleChoresCoordinator(hass)
-    await coordinator.async_init()
+    """Set up SimpleChores from a config entry."""
+    try:
+        coordinator = SimpleChoresCoordinator(hass)
+        await coordinator.async_init()
+    except (asyncio.TimeoutError, ConnectionError, OSError) as ex:
+        raise ConfigEntryNotReady(f"Failed to initialize SimpleChores coordinator: {ex}") from ex
+    except Exception as ex:
+        _LOGGER.exception("Unexpected error setting up SimpleChores")
+        raise ConfigEntryNotReady(f"Setup failed: {ex}") from ex
+    
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    try:
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    except Exception as ex:
+        _LOGGER.exception("Failed to set up platforms")
+        raise ConfigEntryNotReady(f"Failed to set up platforms: {ex}") from ex
 
     # ---- Services ----
-    async def _add_points(call: ServiceCall):
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-
+    async def _add_points(call: ServiceCall) -> None:
+        """Add points service handler."""
         try:
             _LOGGER.debug("SimpleChores: add_points service called")
             data = call.data
-            _LOGGER.debug(f"SimpleChores: service data = {data}")
 
             kid = data["kid"]
             amount = int(data["amount"])
-            reason = data.get("reason", "adjust")
+            reason = data.get("reason", "Manual adjust")
 
-            _LOGGER.debug(f"SimpleChores: Adding {amount} points to {kid}, reason: {reason}")
-            _LOGGER.debug(f"SimpleChores: coordinator = {coordinator}")
-            _LOGGER.debug(f"SimpleChores: coordinator.model = {coordinator.model}")
+            _LOGGER.debug("Adding %d points to %s, reason: %s", amount, kid, reason)
 
             await coordinator.ensure_kid(kid)
-            _LOGGER.debug("SimpleChores: ensure_kid completed")
-
             old_points = coordinator.get_points(kid)
-            _LOGGER.debug(f"SimpleChores: old_points = {old_points}")
-
+            
             await coordinator.add_points(kid, amount, reason, "adjust")
-            _LOGGER.debug("SimpleChores: add_points completed")
-
             new_points = coordinator.get_points(kid)
-            _LOGGER.debug(f"SimpleChores: new_points = {new_points}")
+            
+            _LOGGER.info("Successfully added %d points to %s (%d -> %d)", 
+                        amount, kid, old_points, new_points)
 
-        except Exception as e:
-            _LOGGER.error(f"SimpleChores: add_points service error: {e}")
-            _LOGGER.error(f"SimpleChores: error type: {type(e)}")
-            import traceback
-            _LOGGER.error(f"SimpleChores: traceback: {traceback.format_exc()}")
-            raise
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in add_points service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in add_points service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in add_points service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
 
-    async def _remove_points(call: ServiceCall):
-        data = call.data
-        await coordinator.ensure_kid(data["kid"])
-        await coordinator.remove_points(data["kid"], int(data["amount"]), data.get("reason","adjust"), "adjust")
-
-    async def _create_adhoc(call: ServiceCall):
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-
-        data = call.data
-        title = data["title"]
-        points = int(data["points"])
-        kid = data["kid"]
-        await coordinator.ensure_kid(kid)
-
-        # Create pending chore to track points
-        todo_uid = await coordinator.create_pending_chore(kid, title, points)
-        _LOGGER.debug(f"SimpleChores: Created pending chore {todo_uid} for {kid}")
-
-        # Try to create todo item if todo entities are available
-        title_with_points = f"{title} (+{points})"
-        entity_id = f"todo.{kid}_chores"
-
-        # Try to create todo item
+    async def _remove_points(call: ServiceCall) -> None:
+        """Remove points service handler."""
         try:
-            _LOGGER.debug(f"SimpleChores: Attempting to create todo item '{title_with_points}' for entity {entity_id}")
+            data = call.data
+            kid = data["kid"]
+            amount = int(data["amount"])
+            reason = data.get("reason", "Manual adjust")
 
-            # Method 1: Try the standard todo service call
+            await coordinator.ensure_kid(kid)
+            old_points = coordinator.get_points(kid)
+            
+            await coordinator.remove_points(kid, amount, reason, "adjust")
+            new_points = coordinator.get_points(kid)
+            
+            _LOGGER.info("Successfully removed %d points from %s (%d -> %d)", 
+                        amount, kid, old_points, new_points)
+                        
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in remove_points service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in remove_points service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in remove_points service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
+
+    async def _create_adhoc(call: ServiceCall) -> None:
+        """Create adhoc chore service handler."""
+        try:
+            data = call.data
+            title = data["title"]
+            points = int(data["points"])
+            kid = data["kid"]
+            
+            await coordinator.ensure_kid(kid)
+
+            # Create pending chore to track points
+            todo_uid = await coordinator.create_pending_chore(kid, title, points)
+            _LOGGER.debug("Created pending chore %s for %s", todo_uid, kid)
+
+            # Try to create todo item if todo entities are available
+            title_with_points = f"{title} (+{points})"
+            entity_id = f"todo.{kid}_chores"
+
+            # Try to create todo item
             try:
-                await hass.services.async_call(
-                    "todo", "add_item",
-                    {
-                        "entity_id": entity_id,
-                        "item": title_with_points
-                    },
-                    blocking=False,
-                )
-                _LOGGER.info("SimpleChores: Successfully created todo item via service call")
-            except Exception as service_error:
-                _LOGGER.warning(f"SimpleChores: todo.add_item service failed: {service_error}")
+                _LOGGER.debug("Attempting to create todo item '%s' for entity %s", 
+                            title_with_points, entity_id)
 
-                # Method 2: Try to find and call the entity directly via coordinator
-                if hasattr(coordinator, '_todo_entities') and kid in coordinator._todo_entities:
-                    todo_entity = coordinator._todo_entities[kid]
-                    _LOGGER.debug(f"SimpleChores: Found todo entity for {kid}, calling direct method")
-                    from homeassistant.components.todo import TodoItem, TodoItemStatus
-                    new_item = TodoItem(
-                        summary=title_with_points,
-                        uid=todo_uid,
-                        status=TodoItemStatus.NEEDS_ACTION
+                # Method 1: Try the standard todo service call
+                try:
+                    await hass.services.async_call(
+                        "todo", "add_item",
+                        {
+                            "entity_id": entity_id,
+                            "item": title_with_points
+                        },
+                        blocking=True,
                     )
-                    await todo_entity.async_create_item(new_item)
-                    _LOGGER.info("SimpleChores: Created todo item via direct entity method")
+                    _LOGGER.info("Successfully created todo item via service call")
+                except ServiceNotFound:
+                    _LOGGER.debug("Todo service not available, trying direct entity method")
+                    # Method 2: Try to find and call the entity directly via coordinator
+                    if hasattr(coordinator, '_todo_entities') and kid in coordinator._todo_entities:
+                        todo_entity = coordinator._todo_entities[kid]
+                        _LOGGER.debug("Found todo entity for %s, calling direct method", kid)
+                        from homeassistant.components.todo import TodoItem, TodoItemStatus
+                        new_item = TodoItem(
+                            summary=title_with_points,
+                            uid=todo_uid,
+                            status=TodoItemStatus.NEEDS_ACTION
+                        )
+                        await todo_entity.async_create_item(new_item)
+                        _LOGGER.info("Created todo item via direct entity method")
+                    else:
+                        _LOGGER.debug("No todo entity found for kid %s", kid)
+                except Exception as service_error:
+                    _LOGGER.warning("todo.add_item service failed: %s", service_error)
+                    # Non-critical error - chore is still tracked via pending_chores
+
+            except Exception as ex:
+                _LOGGER.warning("Failed to create todo item: %s", ex)
+                # Chore is still tracked via pending_chores, so this is not critical
+                
+            _LOGGER.info("Successfully created adhoc chore '%s' (%d points) for %s", 
+                        title, points, kid)
+                        
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in create_adhoc service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in create_adhoc service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in create_adhoc service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
+
+    async def _complete_chore(call: ServiceCall) -> None:
+        """Complete chore service handler."""
+        try:
+            data = call.data
+            todo_uid = data.get("todo_uid") or data.get("chore_id")  # Support both names
+
+            if todo_uid:
+                # Complete chore by UID (preferred method)
+                success = await coordinator.complete_chore_by_uid(todo_uid)
+                if success:
+                    _LOGGER.info("Successfully completed chore by UID: %s", todo_uid)
                 else:
-                    _LOGGER.warning(f"SimpleChores: No todo entity found for kid {kid}")
-
-        except Exception as e:
-            _LOGGER.warning(f"SimpleChores: Failed to create todo item: {e}")
-            # Chore is still tracked via pending_chores, so this is not critical
-
-    async def _complete_chore(call: ServiceCall):
-        data = call.data
-        todo_uid = data.get("todo_uid") or data.get("chore_id")  # Support both names
-
-        if todo_uid:
-            # Complete chore by UID (preferred method)
-            success = await coordinator.complete_chore_by_uid(todo_uid)
-            if not success:
-                # Fallback to manual point award
+                    # Fallback to manual point award
+                    if "kid" not in data:
+                        _LOGGER.error("Chore UID not found and no fallback kid specified")
+                        raise HomeAssistantError("Chore not found and no fallback kid specified")
+                        
+                    kid = data["kid"]
+                    points = int(data.get("points", 0))
+                    reason = data.get("reason", "Chore complete")
+                    
+                    await coordinator.ensure_kid(kid)
+                    if points > 0:
+                        await coordinator.add_points(kid, points, reason, "earn")
+                        _LOGGER.info("Awarded %d points to %s as fallback", points, kid)
+                    else:
+                        _LOGGER.warning("No points awarded - fallback had 0 points")
+            else:
+                # Manual point award (legacy)
+                if "kid" not in data:
+                    raise HomeAssistantError("Either todo_uid/chore_id or kid must be specified")
+                    
                 kid = data["kid"]
                 points = int(data.get("points", 0))
                 reason = data.get("reason", "Chore complete")
+                
                 await coordinator.ensure_kid(kid)
-                if points:
+                if points > 0:
                     await coordinator.add_points(kid, points, reason, "earn")
-        else:
-            # Manual point award (legacy)
-            kid = data["kid"]
-            points = int(data.get("points", 0))
-            reason = data.get("reason", "Chore complete")
-            await coordinator.ensure_kid(kid)
-            if points:
-                await coordinator.add_points(kid, points, reason, "earn")
+                    _LOGGER.info("Manual point award: %d points to %s", points, kid)
+                else:
+                    _LOGGER.warning("No points awarded - manual award had 0 points")
+                    
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in complete_chore service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in complete_chore service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in complete_chore service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
 
-    async def _claim_reward(call: ServiceCall):
-        data = call.data
-        kid = data["kid"]
-        reward_id = data.get("reward_id")
-
-        await coordinator.ensure_kid(kid)
-
-        if reward_id:
-            # Use reward system
-            reward = coordinator.get_reward(reward_id)
-            if not reward:
-                return
-
-            kid_points = coordinator.get_points(kid)
-            if kid_points < reward.cost:
-                return  # Not enough points
-
-            await coordinator.remove_points(kid, reward.cost, f"Reward: {reward.title}", "spend")
-
-            # Create calendar event if enabled
-            if reward.create_calendar_event:
-                parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
-                start_time = datetime.now()
-                end_time = start_time + timedelta(hours=reward.calendar_duration_hours)
-
-                try:
-                    await hass.services.async_call(
-                        "calendar", "create_event",
-                        {
-                            "entity_id": parents_calendar,
-                            "summary": f"Family reward — {reward.title} ({kid.capitalize()})",
-                            "description": reward.description,
-                            "start_date_time": start_time.isoformat(),
-                            "end_date_time": end_time.isoformat(),
-                        },
-                        blocking=False
-                    )
-                except Exception:
-                    # Calendar service failed, but still deduct points
-                    pass
-        else:
-            # Legacy direct cost/title method
-            cost = int(data.get("cost", 0))
-            title = data.get("title", "Reward")
-            await coordinator.remove_points(kid, cost, f"Reward: {title}", "spend")
-
-    async def _log_parent_chore(call: ServiceCall):
-        data = call.data
-        parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
-
+    async def _claim_reward(call: ServiceCall) -> None:
+        """Claim reward service handler."""
         try:
-            await hass.services.async_call(
-                "calendar", "create_event",
-                {
-                    "entity_id": parents_calendar,
-                    "summary": data["title"],
-                    "description": data.get("description", ""),
-                    "start_date_time": data.get("start", datetime.now().isoformat()),
-                    "end_date_time": data.get("end", (datetime.now() + timedelta(hours=1)).isoformat()),
-                    "all_day": data.get("all_day", False),
-                },
-                blocking=False
-            )
-        except Exception:
-            # Calendar service failed - log error but don't fail
-            pass
+            data = call.data
+            kid = data["kid"]
+            reward_id = data.get("reward_id")
 
-    async def _create_recurring_chore(call: ServiceCall):
-        data = call.data
-        kid = data["kid"]
-        title = data["title"]
-        points = int(data["points"])
-        schedule_type = data["schedule_type"]
-        day_of_week = data.get("day_of_week")
+            await coordinator.ensure_kid(kid)
 
-        await coordinator.ensure_kid(kid)
-        chore_id = await coordinator.create_recurring_chore(kid, title, points, schedule_type, day_of_week)
+            if reward_id:
+                # Use reward system
+                reward = coordinator.get_reward(reward_id)
+                if not reward:
+                    raise HomeAssistantError(f"Reward not found: {reward_id}")
 
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-        _LOGGER.info(f"SimpleChores: Created recurring chore {chore_id}: {title} for {kid}")
+                kid_points = coordinator.get_points(kid)
+                if kid_points < reward.cost:
+                    raise HomeAssistantError(f"Insufficient points: {kid} has {kid_points}, need {reward.cost}")
 
-    async def _approve_chore(call: ServiceCall):
-        data = call.data
-        approval_id = data["approval_id"]
+                await coordinator.remove_points(kid, reward.cost, f"Reward: {reward.title}", "spend")
+                _LOGGER.info("Successfully claimed reward '%s' for %s (%d points)", 
+                           reward.title, kid, reward.cost)
 
-        success = await coordinator.approve_chore(approval_id)
+                # Create calendar event if enabled
+                if reward.create_calendar_event:
+                    parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
+                    start_time = datetime.now()
+                    end_time = start_time + timedelta(hours=reward.calendar_duration_hours)
 
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-        if success:
-            _LOGGER.info(f"SimpleChores: Approved chore {approval_id}")
-        else:
-            _LOGGER.warning(f"SimpleChores: Failed to approve chore {approval_id}")
+                    try:
+                        await hass.services.async_call(
+                            "calendar", "create_event",
+                            {
+                                "entity_id": parents_calendar,
+                                "summary": f"Family reward — {reward.title} ({kid.capitalize()})",
+                                "description": reward.description,
+                                "start_date_time": start_time.isoformat(),
+                                "end_date_time": end_time.isoformat(),
+                            },
+                            blocking=True
+                        )
+                        _LOGGER.info("Created calendar event for reward: %s", reward.title)
+                    except ServiceNotFound:
+                        _LOGGER.warning("Calendar service not available - reward claimed but no calendar event created")
+                    except Exception as ex:
+                        _LOGGER.error("Failed to create calendar event for reward: %s", ex)
+                        # Don't fail the whole service - points already deducted
+            else:
+                # Legacy direct cost/title method
+                if "cost" not in data:
+                    raise HomeAssistantError("Either reward_id or cost must be specified")
+                    
+                cost = int(data["cost"])
+                title = data.get("title", "Reward")
+                
+                kid_points = coordinator.get_points(kid)
+                if kid_points < cost:
+                    raise HomeAssistantError(f"Insufficient points: {kid} has {kid_points}, need {cost}")
+                
+                await coordinator.remove_points(kid, cost, f"Reward: {title}", "spend")
+                _LOGGER.info("Successfully claimed legacy reward '%s' for %s (%d points)", 
+                           title, kid, cost)
+                           
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in claim_reward service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in claim_reward service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in claim_reward service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
 
-    async def _reject_chore(call: ServiceCall):
-        data = call.data
-        approval_id = data["approval_id"]
-        reason = data.get("reason", "Did not meet standards")
+    async def _log_parent_chore(call: ServiceCall) -> None:
+        """Log parent chore service handler."""
+        try:
+            data = call.data
+            parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
+            
+            if "title" not in data:
+                raise HomeAssistantError("Title is required for parent chore")
 
-        success = await coordinator.reject_chore(approval_id, reason)
+            try:
+                await hass.services.async_call(
+                    "calendar", "create_event",
+                    {
+                        "entity_id": parents_calendar,
+                        "summary": data["title"],
+                        "description": data.get("description", ""),
+                        "start_date_time": data.get("start", datetime.now().isoformat()),
+                        "end_date_time": data.get("end", (datetime.now() + timedelta(hours=1)).isoformat()),
+                        "all_day": data.get("all_day", False),
+                    },
+                    blocking=True
+                )
+                _LOGGER.info("Successfully created parent chore calendar event: %s", data["title"])
+                
+            except ServiceNotFound:
+                _LOGGER.error("Calendar service not found - please ensure calendar integration is set up")
+                raise HomeAssistantError("Calendar service not available")
+            except Exception as ex:
+                _LOGGER.error("Failed to create parent chore calendar event: %s", ex)
+                raise HomeAssistantError(f"Calendar event creation failed: {ex}") from ex
+                
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in log_parent_chore service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in log_parent_chore service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
 
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-        if success:
-            _LOGGER.info(f"SimpleChores: Rejected chore {approval_id}: {reason}")
-        else:
-            _LOGGER.warning(f"SimpleChores: Failed to reject chore {approval_id}")
+    async def _create_recurring_chore(call: ServiceCall) -> None:
+        """Create recurring chore service handler."""
+        try:
+            data = call.data
+            kid = data["kid"]
+            title = data["title"]
+            points = int(data["points"])
+            schedule_type = data["schedule_type"]
+            day_of_week = data.get("day_of_week")
 
-    async def _generate_recurring_chores(call: ServiceCall):
-        """Generate daily and/or weekly recurring chores"""
-        data = call.data
-        schedule_type = data.get("schedule_type", "daily")
+            if schedule_type not in ["daily", "weekly"]:
+                raise HomeAssistantError("schedule_type must be 'daily' or 'weekly'")
+                
+            if schedule_type == "weekly" and day_of_week is None:
+                raise HomeAssistantError("day_of_week is required for weekly chores")
 
-        if schedule_type == "daily":
-            await coordinator.generate_daily_chores()
-        elif schedule_type == "weekly":
-            from datetime import datetime
-            current_day = datetime.now().weekday()  # 0=Monday, 6=Sunday
-            target_day = data.get("day_of_week", current_day)
-            await coordinator.generate_weekly_chores(target_day)
+            await coordinator.ensure_kid(kid)
+            chore_id = await coordinator.create_recurring_chore(kid, title, points, schedule_type, day_of_week)
 
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-        _LOGGER.info(f"SimpleChores: Generated {schedule_type} recurring chores")
+            _LOGGER.info("Created recurring chore %s: %s for %s (%s)", 
+                        chore_id, title, kid, schedule_type)
+                        
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in create_recurring_chore service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in create_recurring_chore service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in create_recurring_chore service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
+
+    async def _approve_chore(call: ServiceCall) -> None:
+        """Approve chore service handler."""
+        try:
+            data = call.data
+            approval_id = data["approval_id"]
+
+            success = await coordinator.approve_chore(approval_id)
+            
+            if success:
+                _LOGGER.info("Successfully approved chore: %s", approval_id)
+            else:
+                raise HomeAssistantError(f"Failed to approve chore: {approval_id} not found")
+                
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in approve_chore service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in approve_chore service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
+
+    async def _reject_chore(call: ServiceCall) -> None:
+        """Reject chore service handler."""
+        try:
+            data = call.data
+            approval_id = data["approval_id"]
+            reason = data.get("reason", "Did not meet standards")
+
+            success = await coordinator.reject_chore(approval_id, reason)
+            
+            if success:
+                _LOGGER.info("Successfully rejected chore %s: %s", approval_id, reason)
+            else:
+                raise HomeAssistantError(f"Failed to reject chore: {approval_id} not found")
+                
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in reject_chore service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in reject_chore service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
+
+    async def _generate_recurring_chores(call: ServiceCall) -> None:
+        """Generate daily and/or weekly recurring chores service handler."""
+        try:
+            data = call.data
+            schedule_type = data.get("schedule_type", "daily")
+
+            if schedule_type not in ["daily", "weekly"]:
+                raise HomeAssistantError("schedule_type must be 'daily' or 'weekly'")
+
+            if schedule_type == "daily":
+                await coordinator.generate_daily_chores()
+                _LOGGER.info("Successfully generated daily recurring chores")
+            elif schedule_type == "weekly":
+                from datetime import datetime
+                current_day = datetime.now().weekday()  # 0=Monday, 6=Sunday
+                target_day = data.get("day_of_week", current_day)
+                
+                if not isinstance(target_day, int) or target_day < 0 or target_day > 6:
+                    raise HomeAssistantError("day_of_week must be an integer 0-6 (Monday-Sunday)")
+                    
+                await coordinator.generate_weekly_chores(target_day)
+                _LOGGER.info("Successfully generated weekly recurring chores for day %d", target_day)
+                
+        except (ValueError, TypeError) as ex:
+            _LOGGER.error("Invalid parameter value in generate_recurring_chores service: %s", ex)
+            raise HomeAssistantError(f"Invalid parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in generate_recurring_chores service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
 
     # Service schemas
     add_points_schema = vol.Schema({
