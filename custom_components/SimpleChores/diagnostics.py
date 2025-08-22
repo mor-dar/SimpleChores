@@ -55,7 +55,7 @@ async def async_get_config_entry_diagnostics(
         approvals_by_status[status] = approvals_by_status.get(status, 0) + 1
 
     return {
-        "integration_version": "1.2.1",
+        "integration_version": "1.3.0",
         "config_data": {
             "kids": entry.data.get("kids", ""),
             "use_todo": entry.data.get("use_todo", True),
