@@ -59,8 +59,13 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
 
 After installation, follow the config flow to:
 - Add children's names
-- Pick whether to use Local To-do lists
+- Pick whether to use Local To-do lists (`use_todo: true/false`)
 - Select a calendar for parents' chores (Local or Google, RW enabled)
+
+#### Todo Mode vs Button Mode
+
+**Todo Mode (Default)**: Each child gets todo list entities for chore management with approval workflow  
+**Button Mode**: Uses buttons and sensors for chore creation and direct approval (no todo lists)
 
 ---
 
@@ -136,11 +141,208 @@ Maintain a Local or Google calendar with recurring events (RRULE). Integration s
 
 A ready-to-use Lovelace view is included:
 
-- **Kids’ balances**: tile cards for each `number.kid_points`.  
-- **To-do cards**: per-kid chores lists.  
+- **Kids' balances**: tile cards for each `number.kid_points`.  
+- **To-do cards**: per-kid chores lists (Todo Mode).  
 - **Ad-hoc creator**: `input_text` + `number` + button to spawn a new chore.  
 - **Rewards**: claim buttons with point costs.  
-- **Parents’ calendar**: built-in Calendar card.
+- **Parents' calendar**: built-in Calendar card.
+
+### Button Mode Dashboard (Todo Disabled)
+
+When `use_todo: false`, the dashboard uses button-based chore management:
+
+#### Per-Child Chore Management
+```yaml
+type: entities
+title: "Alice's Chores"
+entities:
+  - entity: number.simplechores_alice_points
+    name: "Current Points"
+  - entity: sensor.simplechores_alice_points_week
+    name: "This Week"
+  - entity: sensor.simplechores_alice_points_total
+    name: "Total Earned"
+  - type: divider
+  - entity: text.simplechores_alice_chore_title
+    name: "New Chore Title"
+  - entity: number.simplechores_alice_chore_points
+    name: "Point Value"
+  - entity: button.simplechores_alice_create_chore
+    name: "Create Chore"
+  # Approval buttons appear here dynamically
+```
+
+#### Reward System (Both Modes)
+```yaml
+type: entities
+title: "Rewards - Alice"
+entities:
+  - entity: button.simplechores_alice_reward_movie_night
+    name: "Movie Night (20 pts)"
+  - entity: button.simplechores_alice_reward_extra_allowance  
+    name: "Extra Allowance (25 pts)"
+  - entity: button.simplechores_alice_reward_park_trip
+    name: "Park Trip (30 pts)"
+  - entity: button.simplechores_alice_reward_ice_cream
+    name: "Ice Cream (15 pts)"
+```
+
+## 🎯 Button Mode Workflows
+
+### Working Without Todo Lists
+
+When `use_todo: false`, SimpleChores operates in Button Mode with these workflows:
+
+#### 1. Creating Chores
+```yaml
+# Manual chore creation via dashboard
+1. Enter chore title in: text.simplechores_alice_chore_title
+2. Set point value in: number.simplechores_alice_chore_points  
+3. Click: button.simplechores_alice_create_chore
+4. Approval button appears automatically
+
+# Via automation/service
+service: simplechores.create_adhoc_chore
+data:
+  kid_id: "alice"
+  title: "Clean bedroom"
+  points: 10
+```
+
+#### 2. Completing & Approving Chores
+```yaml
+# Direct service completion (bypasses todo workflow)
+service: simplechores.complete_chore
+data:
+  chore_id: "unique-chore-id"
+
+# Manual approval from dashboard
+# Click the dynamically generated approval button:
+# "Approve: Clean bedroom (Alice, 10pts)"
+
+# Service-based approval
+service: simplechores.approve_chore
+data:
+  approval_id: "approval-uuid"
+```
+
+#### 3. Automation Examples
+
+**Create morning chores automatically:**
+```yaml
+automation:
+  - alias: "Morning Chores - Alice"
+    trigger:
+      platform: time
+      at: "07:00:00"
+    action:
+      - service: simplechores.create_adhoc_chore
+        data:
+          kid_id: "alice"
+          title: "Make bed"
+          points: 5
+      - service: simplechores.create_adhoc_chore
+        data:
+          kid_id: "alice"  
+          title: "Brush teeth"
+          points: 2
+```
+
+**Auto-approve low-point chores:**
+```yaml
+automation:
+  - alias: "Auto-approve simple chores"
+    trigger:
+      platform: event
+      event_type: simplechores_chore_completed
+    condition:
+      condition: template
+      value_template: "{{ trigger.event.data.points <= 3 }}"
+    action:
+      service: simplechores.approve_chore
+      data:
+        approval_id: "{{ trigger.event.data.approval_id }}"
+```
+
+**Sensor-based chore completion:**
+```yaml
+automation:
+  - alias: "Bed made sensor"
+    trigger:
+      platform: state
+      entity_id: binary_sensor.alice_bed_sensor
+      to: "on"
+    action:
+      service: simplechores.complete_chore
+      data:
+        chore_id: "daily-make-bed-alice"
+```
+
+#### 4. Advanced Button Mode Patterns
+
+**Family chore rotation:**
+```yaml
+automation:
+  - alias: "Rotate weekly chores"
+    trigger:
+      platform: time
+      at: "00:00:00"
+      weekday:
+        - mon
+    action:
+      - service: simplechores.create_adhoc_chore
+        data:
+          kid_id: "{{ ['alice', 'bob'] | random }}"
+          title: "Take out trash"
+          points: 8
+      - service: simplechores.create_adhoc_chore
+        data:
+          kid_id: "{{ ['alice', 'bob'] | random }}"
+          title: "Load dishwasher"
+          points: 6
+```
+
+**Conditional point bonuses:**
+```yaml
+automation:
+  - alias: "Weekend bonus points"
+    trigger:
+      platform: event
+      event_type: simplechores_chore_approved
+    condition:
+      condition: time
+      weekday:
+        - sat
+        - sun
+    action:
+      service: simplechores.add_points
+      data:
+        kid_id: "{{ trigger.event.data.kid_id }}"
+        points: 2
+        reason: "Weekend bonus"
+```
+
+#### 5. Monitoring & Management
+
+**Check pending approvals:**
+```yaml
+# Template sensor to count pending approvals
+sensor:
+  - platform: template
+    sensors:
+      alice_pending_approvals:
+        friendly_name: "Alice Pending Approvals"
+        value_template: >
+          {{ states | selectattr('entity_id', 'match', 'button.simplechores_alice_approve_.*') | list | count }}
+```
+
+**Reset rejected chores:**
+```yaml
+# Service to reset rejected chores back to pending
+service: simplechores.reset_rejected_chores
+data:
+  kid_id: "alice"
+```
 
 ---
 
