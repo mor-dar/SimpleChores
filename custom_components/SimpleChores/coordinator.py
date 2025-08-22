@@ -2,45 +2,59 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
+from typing import Any
 import uuid
 
 from homeassistant.core import HomeAssistant
+
+_LOGGER = logging.getLogger(__name__)
 
 from .models import Kid, LedgerEntry, PendingApproval, PendingChore, RecurringChore, Reward, StorageModel, TodoItemModel
 from .storage import SimpleChoresStore
 
 
 class SimpleChoresCoordinator:
-    def __init__(self, hass: HomeAssistant):
+    """Coordinates data operations for SimpleChores integration."""
+    
+    def __init__(self, hass: HomeAssistant) -> None:
+        """Initialize the coordinator."""
         self.hass = hass
         self.store = SimpleChoresStore(hass)
         self.model: StorageModel | None = None
 
-    async def async_init(self):
+    async def async_init(self) -> None:
+        """Initialize the coordinator by loading data."""
         self.model = await self.store.async_load()
         # Add default rewards if none exist
         if not self.model.rewards:
             await self._add_default_rewards()
 
-    async def async_save(self):
+    async def async_save(self) -> None:
+        """Save the model data."""
+        if self.model is None:
+            raise RuntimeError("Model not initialized")
         await self.store.async_save(self.model)
 
     # ---- kids/points ----
-    async def ensure_kid(self, kid_id: str, name: str | None = None):
-        assert self.model
+    async def ensure_kid(self, kid_id: str, name: str | None = None) -> None:
+        """Ensure a kid exists in the system."""
+        if self.model is None:
+            raise RuntimeError("Model not initialized")
         if kid_id not in self.model.kids:
             self.model.kids[kid_id] = Kid(id=kid_id, name=name or kid_id)
             await self.async_save()
 
     def get_points(self, kid_id: str) -> int:
-        if not self.model:
-            return 0
-        if kid_id not in self.model.kids:
+        """Get current points for a kid."""
+        if not self.model or kid_id not in self.model.kids:
             return 0
         return self.model.kids[kid_id].points
 
-    async def add_points(self, kid_id: str, amount: int, reason: str, kind: str = "earn"):
-        assert self.model
+    async def add_points(self, kid_id: str, amount: int, reason: str, kind: str = "earn") -> None:
+        """Add points to a kid's account."""
+        if self.model is None:
+            raise RuntimeError("Model not initialized")
         if kid_id not in self.model.kids:
             self.model.kids[kid_id] = Kid(id=kid_id, name=kid_id)
         self.model.kids[kid_id].points += amount
@@ -51,12 +65,15 @@ class SimpleChoresCoordinator:
         # Trigger entity updates
         await self._update_entities(kid_id)
 
-    async def remove_points(self, kid_id: str, amount: int, reason: str, kind: str = "spend"):
+    async def remove_points(self, kid_id: str, amount: int, reason: str, kind: str = "spend") -> None:
+        """Remove points from a kid's account."""
         await self.add_points(kid_id, -abs(amount), reason, kind)
 
     # ---- rewards ----
-    async def _add_default_rewards(self):
-        """Add some default rewards for demo purposes"""
+    async def _add_default_rewards(self) -> None:
+        """Add some default rewards for demo purposes."""
+        if self.model is None:
+            raise RuntimeError("Model not initialized")
         default_rewards = [
             Reward(id="movie_night", title="Family Movie Night", cost=20, description="Pick tonight's movie"),
             Reward(id="extra_allowance", title="Extra $5 Allowance", cost=25, description="Bonus money", create_calendar_event=False),
@@ -68,12 +85,21 @@ class SimpleChoresCoordinator:
         await self.async_save()
 
     def get_rewards(self) -> list[Reward]:
+        """Get all available rewards."""
+        if not self.model:
+            return []
         return list(self.model.rewards.values())
 
     def get_reward(self, reward_id: str) -> Reward | None:
+        """Get a specific reward by ID."""
+        if not self.model:
+            return None
         return self.model.rewards.get(reward_id)
 
     async def add_reward(self, title: str, cost: int, description: str = "", create_calendar_event: bool = True) -> str:
+        """Add a new reward and return its ID."""
+        if self.model is None:
+            raise RuntimeError("Model not initialized")
         reward_id = str(uuid.uuid4())[:8]
         reward = Reward(id=reward_id, title=title, cost=cost, description=description, create_calendar_event=create_calendar_event)
         self.model.rewards[reward_id] = reward
@@ -107,12 +133,9 @@ class SimpleChoresCoordinator:
     def get_pending_chore(self, todo_uid: str) -> PendingChore | None:
         return self.model.pending_chores.get(todo_uid)
 
-    async def _update_entities(self, kid_id: str):
-        """Trigger entity updates after point changes"""
-        import logging
-        _LOGGER = logging.getLogger(__name__)
-
-        _LOGGER.debug(f"SimpleChores: Triggering entity updates for {kid_id}")
+    async def _update_entities(self, kid_id: str) -> None:
+        """Trigger entity updates after point changes."""
+        _LOGGER.debug("Triggering entity updates for %s", kid_id)
 
         # Direct entity state update - most reliable method
         entity = None
@@ -129,19 +152,24 @@ class SimpleChoresCoordinator:
 
         if entity:
             entity.async_write_ha_state()
-            _LOGGER.debug(f"SimpleChores: Updated entity state for {kid_id}")
+            _LOGGER.debug("Updated entity state for %s", kid_id)
         else:
             if hasattr(self, '_entities'):
-                _LOGGER.warning(f"SimpleChores: No entity found for {kid_id}. Available: {list(self._entities.keys())}")
+                _LOGGER.warning("No entity found for %s. Available: %s", 
+                              kid_id, list(self._entities.keys()))
             else:
-                _LOGGER.warning("SimpleChores: No entities registered yet")
+                _LOGGER.debug("No entities registered yet")
 
         # Fallback: trigger entity update via service
         entity_id = f"number.{kid_id}_points"
         try:
-            await self.hass.services.async_call("homeassistant", "update_entity", {"entity_id": entity_id}, blocking=False)
-        except Exception as e:
-            _LOGGER.debug(f"SimpleChores: Fallback update failed: {e}")
+            await self.hass.services.async_call(
+                "homeassistant", "update_entity", 
+                {"entity_id": entity_id}, 
+                blocking=False
+            )
+        except Exception as ex:
+            _LOGGER.debug("Fallback entity update failed: %s", ex)
 
     # ---- recurring chores ----
     async def create_recurring_chore(self, kid_id: str, title: str, points: int, schedule_type: str, day_of_week: int = None) -> str:

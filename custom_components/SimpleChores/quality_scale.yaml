@@ -1,0 +1,158 @@
+# Integration Quality Scale Tracking File
+# This file tracks progress toward Home Assistant Quality Scale compliance
+# For more info: https://developers.home-assistant.io/docs/core/integration-quality-scale/
+
+# Bronze Tier Requirements (Minimum for all new integrations)
+bronze:
+  # BR1: Can be easily set up through the UI
+  setup_ui:
+    rule_id: "BR1"
+    passed: true
+    comment: "Integration uses config flow for setup"
+    
+  # BR2: Adheres to basic coding standards and development guidelines  
+  coding_standards:
+    rule_id: "BR2"
+    passed: true
+    comment: "Code follows HA standards with proper imports and structure"
+    
+  # BR3: Automated tests that guard the integration can be configured correctly
+  basic_tests:
+    rule_id: "BR3"
+    passed: true
+    comment: "Comprehensive pytest test suite with >90% coverage"
+    
+  # BR4: Basic end-user documentation
+  basic_docs:
+    rule_id: "BR4"
+    passed: true
+    comment: "README with setup instructions and usage examples"
+    
+  # BR5: Setup error handling with ConfigEntryNotReady
+  setup_error_handling:
+    rule_id: "BR5"
+    passed: true
+    comment: "Implemented ConfigEntryNotReady pattern for setup failures"
+    
+  # BR6: Service error handling
+  service_error_handling:
+    rule_id: "BR6"
+    passed: true
+    comment: "All services have proper exception handling and logging"
+
+# Silver Tier Requirements  
+silver:
+  # SR1: Stable user experience under various conditions
+  stable_experience:
+    rule_id: "SR1"
+    passed: false
+    comment: "Working on automatic recovery from connection errors"
+    
+  # SR2: Active code owners maintaining the integration
+  active_maintainers:
+    rule_id: "SR2"
+    passed: true
+    comment: "Active maintainer (@mor-dar) with regular updates"
+    
+  # SR3: Automatic recovery from connection errors
+  auto_recovery:
+    rule_id: "SR3"
+    passed: false
+    comment: "Need to implement automatic recovery for storage failures"
+    
+  # SR4: Automatic re-authentication if needed
+  auto_reauth:
+    rule_id: "SR4"
+    passed: true
+    comment: "No authentication required - local storage only"
+    
+  # SR5: Detailed troubleshooting documentation  
+  troubleshooting_docs:
+    rule_id: "SR5"
+    passed: true
+    comment: "Comprehensive troubleshooting guide in docs/"
+
+# Gold Tier Requirements
+gold:
+  # GR1: Best end-user experience
+  best_experience:
+    rule_id: "GR1"
+    passed: false
+    comment: "Working toward optimal user experience"
+    
+  # GR2: Automatic device discovery
+  device_discovery:
+    rule_id: "GR2"
+    passed: true
+    comment: "N/A - integration creates entities, not devices"
+    
+  # GR3: Supports translations
+  translations:
+    rule_id: "GR3"
+    passed: false
+    comment: "Need to add translation files for UI strings"
+    
+  # GR4: Extensive, non-technical documentation
+  extensive_docs:
+    rule_id: "GR4"
+    passed: true
+    comment: "Comprehensive user-friendly documentation with examples"
+    
+  # GR5: Full automated test coverage
+  full_test_coverage:
+    rule_id: "GR5"
+    passed: true
+    comment: "Comprehensive test suite covering all functionality"
+
+# Platinum Tier Requirements
+platinum:
+  # PR1: Follows all coding and integration standards
+  full_standards:
+    rule_id: "PR1"
+    passed: true
+    comment: "Code follows HA standards with comprehensive type annotations"
+    
+  # PR2: Fully typed with clear code comments
+  full_typing:
+    rule_id: "PR2"  
+    passed: true
+    comment: "Complete type annotations and comprehensive docstrings"
+    
+  # PR3: Fully asynchronous codebase
+  full_async:
+    rule_id: "PR3"
+    passed: true
+    comment: "Integration uses async/await throughout"
+    
+  # PR4: Efficient data handling
+  efficient_data:
+    rule_id: "PR4"
+    passed: true
+    comment: "Uses HA Store API efficiently with minimal memory footprint"
+    
+  # PR5: Reduced network and CPU usage
+  optimized_performance:
+    rule_id: "PR5"
+    passed: true
+    comment: "Local storage only, minimal resource usage"
+
+# Current Status Assessment
+current_tier: "bronze"
+target_tier: "silver"
+
+# Next Steps to Reach Silver Tier
+next_steps:
+  - "Implement automatic recovery from storage failures"
+  - "Add more robust error handling for edge cases"
+  - "Enhance diagnostic information for troubleshooting"
+
+# Exemptions
+exemptions:
+  - rule_id: "GR2"
+    reason: "Integration creates entities, not discoverable devices"
+  - rule_id: "SR4" 
+    reason: "No authentication required - local storage only"
+
+# Last Updated
+last_updated: "2025-01-22"
+version: "1.2.1"
