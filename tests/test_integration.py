@@ -262,6 +262,50 @@ class TestSimpleChoresIntegration:
             assert calendar_call is not None
 
     @pytest.mark.asyncio
+    async def test_request_approval_service(self, mock_hass, mock_config_entry, mock_coordinator):
+        """Test request_approval service."""
+        mock_hass.data = {DOMAIN: {mock_config_entry.entry_id: mock_coordinator}}
+        
+        # Mock pending chore
+        from custom_components.simplechores.models import PendingChore
+        from datetime import datetime
+        mock_chore = PendingChore(
+            todo_uid="test-uid",
+            kid_id="alice",
+            title="Test Chore",
+            points=10,
+            created_ts=datetime.now().timestamp(),
+            status="pending"
+        )
+        mock_coordinator.get_pending_chore = Mock(return_value=mock_chore)
+        mock_coordinator.request_approval = AsyncMock(return_value="approval-123")
+
+        with patch('custom_components.simplechores.SimpleChoresCoordinator', return_value=mock_coordinator):
+            await async_setup_entry(mock_hass, mock_config_entry)
+
+            # Get the service handler
+            service_calls = mock_hass.services.async_register.call_args_list
+            request_approval_call = None
+            for call in service_calls:
+                if call[0][1] == "request_approval":
+                    request_approval_call = call
+                    break
+
+            service_handler = request_approval_call[0][2]
+
+            call_data = ServiceCall(
+                hass=mock_hass,
+                domain=DOMAIN,
+                service="request_approval",
+                data={"todo_uid": "test-uid"}
+            )
+
+            await service_handler(call_data)
+
+            mock_coordinator.get_pending_chore.assert_called_with("test-uid")
+            mock_coordinator.request_approval.assert_called_with("test-uid")
+
+    @pytest.mark.asyncio
     async def test_service_unregistration_on_unload(self, mock_hass, mock_config_entry):
         """Test services are unregistered when integration is unloaded."""
         # Set up with one entry

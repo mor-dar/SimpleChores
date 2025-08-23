@@ -28,6 +28,7 @@ from .const import (
     SERVICE_LOG_PARENT_CHORE,
     SERVICE_REJECT_CHORE,
     SERVICE_REMOVE_POINTS,
+    SERVICE_REQUEST_APPROVAL,
 )
 from .coordinator import SimpleChoresCoordinator
 
@@ -481,6 +482,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.exception("Unexpected error in generate_recurring_chores service")
             raise HomeAssistantError(f"Service failed: {ex}") from ex
 
+    async def _request_approval(call: ServiceCall) -> None:
+        """Request approval for a pending chore service handler."""
+        try:
+            data = call.data
+            todo_uid = data["todo_uid"]
+
+            _LOGGER.info("Requesting approval for chore %s", todo_uid)
+
+            # Get the pending chore to validate it exists
+            chore = coordinator.get_pending_chore(todo_uid)
+            if not chore:
+                raise HomeAssistantError(f"Chore not found: {todo_uid}")
+
+            if chore.status != "pending":
+                raise HomeAssistantError(f"Chore {todo_uid} is not in pending status (current: {chore.status})")
+
+            # Request approval via coordinator
+            approval_id = await coordinator.request_approval(todo_uid)
+            
+            if approval_id:
+                _LOGGER.info("Successfully requested approval for chore %s (approval_id: %s)", todo_uid, approval_id)
+            else:
+                raise HomeAssistantError(f"Failed to request approval for chore: {todo_uid}")
+                
+        except KeyError as ex:
+            _LOGGER.error("Missing required parameter in request_approval service: %s", ex)
+            raise HomeAssistantError(f"Missing required parameter: {ex}") from ex
+        except Exception as ex:
+            _LOGGER.exception("Unexpected error in request_approval service")
+            raise HomeAssistantError(f"Service failed: {ex}") from ex
+
     # Service schemas
     add_points_schema = vol.Schema({
         vol.Required("kid"): cv.string,
@@ -542,6 +574,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Optional("day_of_week"): vol.In([0, 1, 2, 3, 4, 5, 6]),
     })
 
+    request_approval_schema = vol.Schema({
+        vol.Required("todo_uid"): cv.string,
+    })
+
     hass.services.async_register(DOMAIN, SERVICE_ADD_POINTS, _add_points, schema=add_points_schema)
     hass.services.async_register(DOMAIN, SERVICE_REMOVE_POINTS, _remove_points, schema=add_points_schema)
     hass.services.async_register(DOMAIN, SERVICE_CREATE_ADHOC, _create_adhoc, schema=create_adhoc_schema)
@@ -551,6 +587,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.services.async_register(DOMAIN, SERVICE_CREATE_RECURRING, _create_recurring_chore, schema=create_recurring_schema)
     hass.services.async_register(DOMAIN, SERVICE_APPROVE_CHORE, _approve_chore, schema=approve_chore_schema)
     hass.services.async_register(DOMAIN, SERVICE_REJECT_CHORE, _reject_chore, schema=reject_chore_schema)
+    hass.services.async_register(DOMAIN, SERVICE_REQUEST_APPROVAL, _request_approval, schema=request_approval_schema)
     hass.services.async_register(DOMAIN, SERVICE_GENERATE_RECURRING, _generate_recurring_chores, schema=generate_recurring_schema)
 
     return True
