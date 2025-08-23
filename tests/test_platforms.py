@@ -292,6 +292,8 @@ class TestSimpleChoresButton:
             Reward(id="ice_cream", title="Ice Cream", cost=15)
         ])
         mock_coordinator.get_pending_approvals = Mock(return_value=[])
+        mock_coordinator.model = Mock()
+        mock_coordinator.model.pending_chores = {}  # Empty dict for no pending chores
         mock_hass.data = {DOMAIN: {"test_entry": mock_coordinator}}
 
         await button_setup(mock_hass, mock_entry, add_entities)

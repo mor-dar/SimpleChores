@@ -34,6 +34,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         entities.append(SimpleChoresApproveButton(coordinator, approval.id, hass))
         entities.append(SimpleChoresRejectButton(coordinator, approval.id, hass))
 
+    # Claim buttons for pending chores (kids use these to request approval)
+    if hasattr(coordinator.model, 'pending_chores') and coordinator.model.pending_chores:
+        for todo_uid, chore in coordinator.model.pending_chores.items():
+            if chore.status == "pending":  # Only show claim buttons for pending chores
+                entities.append(SimpleChoresClaimButton(coordinator, todo_uid, hass))
+
     # Reset rejected chores button
     entities.append(SimpleChoresResetRejectedButton(coordinator, hass))
 
@@ -426,6 +432,48 @@ class SimpleChoresRejectButton(ButtonEntity):
             return False
         approval = self._coord.get_pending_approval(self._approval_id)
         return approval is not None
+
+
+class SimpleChoresClaimButton(ButtonEntity):
+    """Button for kids to claim chore completion and request approval."""
+    _attr_icon = "mdi:hand-heart"
+
+    def __init__(self, coord: SimpleChoresCoordinator, todo_uid: str, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._todo_uid = todo_uid
+        # Use consistent naming pattern: simplechores_claim_{todo_uid}
+        self._attr_unique_id = f"{DOMAIN}_claim_{todo_uid}"
+        
+        # Get chore details for friendly name
+        chore = coord.get_pending_chore(todo_uid)
+        if chore:
+            self._attr_name = f"SimpleChores Claim {chore.title} ({chore.kid_id.capitalize()}) - {chore.points}pts"
+        else:
+            self._attr_name = f"SimpleChores Claim {todo_uid}"
+
+    async def async_press(self) -> None:
+        """Handle the button press - kid claims chore completion."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        try:
+            await self._hass.services.async_call(
+                DOMAIN, "request_approval",
+                {"todo_uid": self._todo_uid}
+            )
+            _LOGGER.info("SimpleChores: Requested approval for chore %s", self._todo_uid)
+        except Exception as e:
+            _LOGGER.error(f"SimpleChores: Failed to request approval for chore {self._todo_uid}: {e}")
+
+    @property
+    def available(self) -> bool:
+        """Check if claim button should be available."""
+        if self._coord.model is None:
+            return False
+        chore = self._coord.get_pending_chore(self._todo_uid)
+        # Only available for pending chores (not completed/approved/rejected)
+        return chore is not None and chore.status == "pending"
 
 
 class SimpleChoresResetRejectedButton(ButtonEntity):
