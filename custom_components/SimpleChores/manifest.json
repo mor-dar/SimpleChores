@@ -1,7 +1,7 @@
 {
   "domain": "simplechores",
   "name": "SimpleChores",
-  "version": "1.4.3",
+  "version": "1.4.4",
   "documentation": "https://github.com/mor-dar/SimpleChores",
   "issue_tracker": "https://github.com/mor-dar/SimpleChores/issues",
   "dependencies": [],
