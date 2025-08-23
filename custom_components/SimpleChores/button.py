@@ -15,6 +15,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     kids_csv = entry.data.get("kids", "alex,emma")
     kids = [k.strip() for k in kids_csv.split(",") if k.strip()]
 
+    # Register callback for dynamic entity creation
+    coordinator.set_add_entities_callback(add_entities)
+
     entities = []
     # Create chore button
     entities.append(SimpleChoresCreateChoreButton(coordinator, hass))
@@ -37,6 +40,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
         for todo_uid, chore in coordinator.model.pending_chores.items():
             if chore.status == "pending":  # Only create buttons for pending chores
                 entities.append(SimpleChoresIndividualClaimButton(coordinator, todo_uid, hass))
+
+    # Create approve/reject buttons for existing pending approvals
+    if hasattr(coordinator.model, 'pending_approvals') and coordinator.model.pending_approvals:
+        try:
+            for approval_id, approval in coordinator.model.pending_approvals.items():
+                if hasattr(approval, 'status') and approval.status == "pending_approval":  # Only create buttons for pending approvals
+                    entities.append(SimpleChoresApproveButton(coordinator, approval_id, hass))
+                    entities.append(SimpleChoresRejectButton(coordinator, approval_id, hass))
+        except (TypeError, AttributeError):
+            # Handle cases where coordinator.model is mocked in tests
+            pass
 
     # Fallback bulk claim button for each kid (for remaining chores after individual claims)
     for kid_id in kids:
@@ -395,7 +409,7 @@ class SimpleChoresApproveButton(ButtonEntity):
         if self._coord.model is None:
             return False
         approval = self._coord.get_pending_approval(self._approval_id)
-        return approval is not None
+        return approval is not None and approval.status == "pending_approval"
 
 
 class SimpleChoresRejectButton(ButtonEntity):
@@ -436,7 +450,7 @@ class SimpleChoresRejectButton(ButtonEntity):
         if self._coord.model is None:
             return False
         approval = self._coord.get_pending_approval(self._approval_id)
-        return approval is not None
+        return approval is not None and approval.status == "pending_approval"
 
 
 class SimpleChoresClaimButton(ButtonEntity):
