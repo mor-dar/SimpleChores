@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 
 _LOGGER = logging.getLogger(__name__)
 
-from .models import Kid, LedgerEntry, PendingApproval, PendingChore, RecurringChore, Reward, StorageModel, TodoItemModel
+from .models import Kid, LedgerEntry, PendingApproval, PendingChore, RecurringChore, Reward, RewardProgress, StorageModel, TodoItemModel
 from .storage import SimpleChoresStore
 
 
@@ -75,10 +75,19 @@ class SimpleChoresCoordinator:
         if self.model is None:
             raise RuntimeError("Model not initialized")
         default_rewards = [
+            # Legacy point-based rewards (still supported)
             Reward(id="movie_night", title="Family Movie Night", cost=20, description="Pick tonight's movie"),
             Reward(id="extra_allowance", title="Extra $5 Allowance", cost=25, description="Bonus money", create_calendar_event=False),
-            Reward(id="trip_park", title="Trip to the Park", cost=30, description="Special outing", calendar_duration_hours=3),
-            Reward(id="ice_cream", title="Ice Cream Trip", cost=15, description="Sweet treat outing", calendar_duration_hours=1),
+            
+            # New completion-based rewards
+            Reward(id="trash_master", title="Trash Master Badge", required_completions=10, required_chore_type="trash", 
+                  description="Take out trash 10 times", create_calendar_event=False),
+            Reward(id="bed_streak", title="Perfect Week - Bed Made", required_streak_days=7, required_chore_type="bed",
+                  description="Make bed every day for 1 week", calendar_duration_hours=2),
+            Reward(id="dish_hero", title="Dish Washing Hero", required_completions=15, required_chore_type="dishes",
+                  description="Wash dishes 15 times", create_calendar_event=False),
+            Reward(id="clean_streak", title="Super Clean Streak", required_streak_days=14, required_chore_type="room",
+                  description="Clean room every day for 2 weeks", calendar_duration_hours=3),
         ]
         for reward in default_rewards:
             self.model.rewards[reward.id] = reward
@@ -106,8 +115,125 @@ class SimpleChoresCoordinator:
         await self.async_save()
         return reward_id
 
+    def _get_progress_key(self, kid_id: str, reward_id: str) -> str:
+        """Generate key for reward progress tracking."""
+        return f"{kid_id}_{reward_id}"
+
+    def get_reward_progress(self, kid_id: str, reward_id: str) -> RewardProgress | None:
+        """Get progress for a specific kid-reward combination."""
+        if not self.model:
+            return None
+        key = self._get_progress_key(kid_id, reward_id)
+        return self.model.reward_progress.get(key)
+
+    async def _ensure_reward_progress(self, kid_id: str, reward_id: str) -> RewardProgress:
+        """Ensure reward progress exists for a kid-reward combination."""
+        if not self.model:
+            raise RuntimeError("Model not initialized")
+        key = self._get_progress_key(kid_id, reward_id)
+        if key not in self.model.reward_progress:
+            self.model.reward_progress[key] = RewardProgress(kid_id=kid_id, reward_id=reward_id)
+        return self.model.reward_progress[key]
+
+    async def update_reward_progress(self, kid_id: str, chore_type: str | None, completed_date: str) -> list[str]:
+        """Update reward progress when a chore is completed. Returns list of newly achieved reward IDs."""
+        if not self.model:
+            raise RuntimeError("Model not initialized")
+        
+        achieved_rewards = []
+        
+        for reward in self.model.rewards.values():
+            # Skip point-based rewards
+            if reward.is_point_based():
+                continue
+                
+            # Skip if chore type doesn't match reward requirement
+            if reward.required_chore_type and reward.required_chore_type != chore_type:
+                continue
+            
+            progress = await self._ensure_reward_progress(kid_id, reward.id)
+            
+            # Skip if already completed
+            if progress.completed:
+                continue
+            
+            if reward.is_completion_based():
+                progress.current_completions += 1
+                if progress.current_completions >= reward.required_completions:
+                    progress.completed = True
+                    progress.completion_date = datetime.now().timestamp()
+                    achieved_rewards.append(reward.id)
+                    _LOGGER.info("Reward achieved: %s completed %s (%d/%d)", 
+                               kid_id, reward.title, progress.current_completions, reward.required_completions)
+            
+            elif reward.is_streak_based():
+                # Check if this continues the streak
+                from datetime import timedelta
+                today = datetime.now().date()
+                completed_date_obj = datetime.strptime(completed_date, "%Y-%m-%d").date()
+                
+                if progress.last_completion_date:
+                    last_date = datetime.strptime(progress.last_completion_date, "%Y-%m-%d").date()
+                    days_diff = (completed_date_obj - last_date).days
+                    
+                    if days_diff == 1:
+                        # Consecutive day - continue streak
+                        progress.current_streak += 1
+                    elif days_diff == 0:
+                        # Same day - don't increment but don't break streak
+                        pass
+                    else:
+                        # Streak broken - reset
+                        progress.current_streak = 1
+                else:
+                    # First completion
+                    progress.current_streak = 1
+                
+                progress.last_completion_date = completed_date
+                
+                if progress.current_streak >= reward.required_streak_days:
+                    progress.completed = True
+                    progress.completion_date = datetime.now().timestamp()
+                    achieved_rewards.append(reward.id)
+                    _LOGGER.info("Streak reward achieved: %s completed %s (%d days)", 
+                               kid_id, reward.title, progress.current_streak)
+        
+        if achieved_rewards:
+            await self.async_save()
+            # Trigger reward celebration/notification
+            await self._notify_reward_achievements(kid_id, achieved_rewards)
+        
+        return achieved_rewards
+
+    async def _notify_reward_achievements(self, kid_id: str, reward_ids: list[str]) -> None:
+        """Handle reward achievements - create calendar events, fire events, etc."""
+        from datetime import timedelta
+        
+        for reward_id in reward_ids:
+            reward = self.get_reward(reward_id)
+            if not reward:
+                continue
+                
+            _LOGGER.info("🎉 %s achieved reward: %s", kid_id, reward.title)
+            
+            # Create calendar event if enabled
+            if reward.create_calendar_event:
+                # This will be handled by the service layer to access hass services
+                pass
+            
+            # Fire Home Assistant event for automations
+            if hasattr(self, 'hass'):
+                self.hass.bus.async_fire(
+                    "simplechores_reward_achieved",
+                    {
+                        "kid_id": kid_id,
+                        "reward_id": reward_id,
+                        "reward_title": reward.title,
+                    }
+                )
+
     # ---- chores ----
-    async def create_pending_chore(self, kid_id: str, title: str, points: int) -> str:
+    async def create_pending_chore(self, kid_id: str, title: str, points: int, chore_type: str | None = None) -> str:
         """Create a chore and return the todo_uid to track it"""
         todo_uid = str(uuid.uuid4())
         chore = PendingChore(
@@ -115,7 +241,8 @@ class SimpleChoresCoordinator:
             kid_id=kid_id,
             title=title,
             points=points,
-            created_ts=datetime.now().timestamp()
+            created_ts=datetime.now().timestamp(),
+            chore_type=chore_type
         )
         self.model.pending_chores[todo_uid] = chore
         await self.async_save()
@@ -126,6 +253,11 @@ class SimpleChoresCoordinator:
         if todo_uid in self.model.pending_chores:
             chore = self.model.pending_chores.pop(todo_uid)
             await self.add_points(chore.kid_id, chore.points, f"Chore: {chore.title}", "earn")
+            
+            # Update reward progress
+            completed_date = datetime.now().strftime("%Y-%m-%d")
+            achieved_rewards = await self.update_reward_progress(chore.kid_id, chore.chore_type, completed_date)
+            
             await self.async_save()
             return True
         return False
@@ -172,7 +304,7 @@ class SimpleChoresCoordinator:
             _LOGGER.debug("Fallback entity update failed: %s", ex)
 
     # ---- recurring chores ----
-    async def create_recurring_chore(self, kid_id: str, title: str, points: int, schedule_type: str, day_of_week: int = None) -> str:
+    async def create_recurring_chore(self, kid_id: str, title: str, points: int, schedule_type: str, day_of_week: int = None, chore_type: str = None) -> str:
         """Create a recurring chore template"""
         assert self.model
         chore_id = str(uuid.uuid4())[:8]
@@ -184,7 +316,8 @@ class SimpleChoresCoordinator:
             kid_id=kid_id,
             schedule_type=schedule_type,
             day_of_week=day_of_week,
-            enabled=True
+            enabled=True,
+            chore_type=chore_type
         )
 
         self.model.recurring_chores[chore_id] = recurring_chore
@@ -203,7 +336,7 @@ class SimpleChoresCoordinator:
         for chore in self.model.recurring_chores.values():
             if chore.enabled and chore.schedule_type == "daily":
                 # Create a new todo item for this chore
-                todo_uid = await self.create_pending_chore(chore.kid_id, chore.title, chore.points)
+                todo_uid = await self.create_pending_chore(chore.kid_id, chore.title, chore.points, chore.chore_type)
                 # Also create in todo list if available
                 if hasattr(self, '_todo_entities') and chore.kid_id in self._todo_entities:
                     from homeassistant.components.todo import TodoItem, TodoItemStatus
@@ -220,7 +353,7 @@ class SimpleChoresCoordinator:
         for chore in self.model.recurring_chores.values():
             if chore.enabled and chore.schedule_type == "weekly" and chore.day_of_week == target_day:
                 # Create a new todo item for this chore
-                todo_uid = await self.create_pending_chore(chore.kid_id, chore.title, chore.points)
+                todo_uid = await self.create_pending_chore(chore.kid_id, chore.title, chore.points, chore.chore_type)
                 # Also create in todo list if available
                 if hasattr(self, '_todo_entities') and chore.kid_id in self._todo_entities:
                     from homeassistant.components.todo import TodoItem, TodoItemStatus
@@ -273,6 +406,14 @@ class SimpleChoresCoordinator:
 
             # Award points
             await self.add_points(approval.kid_id, approval.points, f"Approved: {approval.title}", "earn")
+
+            # Update reward progress
+            chore_type = None
+            if approval.todo_uid in self.model.pending_chores:
+                chore_type = self.model.pending_chores[approval.todo_uid].chore_type
+            
+            completed_date = datetime.now().strftime("%Y-%m-%d")
+            achieved_rewards = await self.update_reward_progress(approval.kid_id, chore_type, completed_date)
 
             # Update approval status
             approval.status = "approved"
