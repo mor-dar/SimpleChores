@@ -28,7 +28,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     # Approval status button
     entities.append(SimpleChoresApprovalStatusButton(coordinator, hass))
 
-    # Individual approval buttons will be created dynamically
+    # Individual approval/rejection buttons for each pending approval
+    pending_approvals = coordinator.get_pending_approvals()
+    for approval in pending_approvals:
+        entities.append(SimpleChoresApproveButton(coordinator, approval.id, hass))
+        entities.append(SimpleChoresRejectButton(coordinator, approval.id, hass))
 
     # Reset rejected chores button
     entities.append(SimpleChoresResetRejectedButton(coordinator, hass))
@@ -85,29 +89,45 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
 
         if not all([title_entity, points_entity, kid_entity]):
             _LOGGER.warning("SimpleChores: Could not get states for all text input entities")
+            _LOGGER.warning(f"SimpleChores: Found states - title: {title_entity}, points: {points_entity}, kid: {kid_entity}")
             return
 
-        title = title_entity.state
+        title = title_entity.state if title_entity else ""
         try:
-            points = int(points_entity.state)
+            points = int(points_entity.state) if points_entity and points_entity.state else 5
         except (ValueError, TypeError):
             points = 5
-        kid = kid_entity.state
+        kid = kid_entity.state if kid_entity else ""
 
         _LOGGER.info(f"SimpleChores: Creating chore - title: '{title}', points: {points}, kid: '{kid}'")
 
-        if title and kid:
-            # Create chore via service
-            try:
+        # Validate inputs
+        if not title or title.strip() == "" or title == "Enter chore name":
+            _LOGGER.warning("SimpleChores: Title is empty or still default value")
+            return
+            
+        if not kid or kid.strip() == "":
+            _LOGGER.warning("SimpleChores: Kid is empty")
+            return
+
+        # Create chore via service
+        try:
+            await self._hass.services.async_call(
+                DOMAIN, "create_adhoc_chore",
+                {"kid": kid.strip(), "title": title.strip(), "points": points}
+            )
+            _LOGGER.info("SimpleChores: Successfully called create_adhoc_chore service")
+            
+            # Clear the title field after successful creation
+            if title_entity_id:
                 await self._hass.services.async_call(
-                    DOMAIN, "create_adhoc_chore",
-                    {"kid": kid, "title": title, "points": points}
+                    "text", "set_value",
+                    {"entity_id": title_entity_id, "value": ""}
                 )
-                _LOGGER.info("SimpleChores: Successfully called create_adhoc_chore service")
-            except Exception as e:
-                _LOGGER.error(f"SimpleChores: Failed to call create_adhoc_chore service: {e}")
-        else:
-            _LOGGER.warning(f"SimpleChores: Missing title or kid - title: '{title}', kid: '{kid}'")
+        except Exception as e:
+            _LOGGER.error(f"SimpleChores: Failed to call create_adhoc_chore service: {e}")
+            import traceback
+            _LOGGER.error(f"SimpleChores: Traceback: {traceback.format_exc()}")
 
 class SimpleChoresRewardButton(ButtonEntity):
     _attr_icon = "mdi:gift"
@@ -118,9 +138,13 @@ class SimpleChoresRewardButton(ButtonEntity):
         self._reward_id = reward_id
         self._kid_id = kid_id
         reward = coord.get_reward(reward_id)
-        self._attr_unique_id = f"{DOMAIN}_reward_{reward_id}_{kid_id}"
+        # Use consistent naming pattern for auto-entities: simplechores_{reward_id}_reward_{kid_id}
+        self._attr_unique_id = f"{DOMAIN}_{reward_id}_reward_{kid_id}"
         if reward:
-            self._attr_name = f"SimpleChores {reward.title} ({kid_id.capitalize()}) - {reward.cost}pts"
+            if reward.is_point_based():
+                self._attr_name = f"SimpleChores {reward.title} ({kid_id.capitalize()}) - {reward.cost}pts"
+            else:
+                self._attr_name = f"SimpleChores {reward.title} ({kid_id.capitalize()})"
         else:
             self._attr_name = f"SimpleChores Unknown Reward ({kid_id.capitalize()})"
 
@@ -196,42 +220,62 @@ class SimpleChoresCreateRecurringButton(ButtonEntity):
 
         if not all([title_entity, points_entity, kid_entity, schedule_entity, day_entity]):
             _LOGGER.warning("SimpleChores: Could not get states for all recurring chore input entities")
+            _LOGGER.warning(f"SimpleChores: Found states - title: {title_entity}, points: {points_entity}, kid: {kid_entity}, schedule: {schedule_entity}, day: {day_entity}")
             return
 
-        title = title_entity.state
+        title = title_entity.state if title_entity else ""
         try:
-            points = int(points_entity.state)
+            points = int(points_entity.state) if points_entity and points_entity.state else 2
         except (ValueError, TypeError):
             points = 2
-        kid = kid_entity.state
-        schedule_type = schedule_entity.state
+        kid = kid_entity.state if kid_entity else ""
+        schedule_type = schedule_entity.state if schedule_entity else ""
         try:
-            day_of_week = int(day_entity.state) if schedule_type == "weekly" else None
+            day_of_week = int(day_entity.state) if schedule_type == "weekly" and day_entity and day_entity.state else None
         except (ValueError, TypeError):
             day_of_week = None
 
         _LOGGER.info(f"SimpleChores: Creating recurring chore - title: '{title}', points: {points}, kid: '{kid}', schedule: '{schedule_type}', day: {day_of_week}")
 
-        if title and kid and schedule_type:
-            try:
-                service_data = {
-                    "kid": kid,
-                    "title": title,
-                    "points": points,
-                    "schedule_type": schedule_type
-                }
-                if day_of_week is not None:
-                    service_data["day_of_week"] = day_of_week
+        # Validate inputs
+        if not title or title.strip() == "":
+            _LOGGER.warning("SimpleChores: Recurring title is empty")
+            return
+            
+        if not kid or kid.strip() == "":
+            _LOGGER.warning("SimpleChores: Recurring kid is empty")
+            return
+            
+        if not schedule_type or schedule_type not in ["daily", "weekly"]:
+            _LOGGER.warning(f"SimpleChores: Invalid schedule type: '{schedule_type}' (must be 'daily' or 'weekly')")
+            return
 
+        try:
+            service_data = {
+                "kid": kid.strip(),
+                "title": title.strip(),
+                "points": points,
+                "schedule_type": schedule_type
+            }
+            if day_of_week is not None:
+                service_data["day_of_week"] = day_of_week
+
+            await self._hass.services.async_call(
+                DOMAIN, "create_recurring_chore",
+                service_data
+            )
+            _LOGGER.info("SimpleChores: Successfully called create_recurring_chore service")
+            
+            # Clear the title field after successful creation
+            if title_entity_id:
                 await self._hass.services.async_call(
-                    DOMAIN, "create_recurring_chore",
-                    service_data
+                    "text", "set_value",
+                    {"entity_id": title_entity_id, "value": "Brush teeth"}
                 )
-                _LOGGER.info("SimpleChores: Successfully called create_recurring_chore service")
-            except Exception as e:
-                _LOGGER.error(f"SimpleChores: Failed to call create_recurring_chore service: {e}")
-        else:
-            _LOGGER.warning(f"SimpleChores: Missing required fields - title: '{title}', kid: '{kid}', schedule: '{schedule_type}'")
+        except Exception as e:
+            _LOGGER.error(f"SimpleChores: Failed to call create_recurring_chore service: {e}")
+            import traceback
+            _LOGGER.error(f"SimpleChores: Traceback: {traceback.format_exc()}")
 
 class SimpleChoresGenerateDailyButton(ButtonEntity):
     _attr_icon = "mdi:calendar-today"
@@ -301,6 +345,88 @@ class SimpleChoresApprovalStatusButton(ButtonEntity):
             _LOGGER.info(f"  - ID: {approval.id}, Kid: {approval.kid_id}, Chore: {approval.title}, Points: {approval.points}")
             _LOGGER.info(f"    To approve: simplechores.approve_chore with approval_id: {approval.id}")
             _LOGGER.info(f"    To reject: simplechores.reject_chore with approval_id: {approval.id}")
+
+class SimpleChoresApproveButton(ButtonEntity):
+    """Button to approve a specific chore."""
+    _attr_icon = "mdi:check-circle"
+
+    def __init__(self, coord: SimpleChoresCoordinator, approval_id: str, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._approval_id = approval_id
+        # Use consistent naming pattern: simplechores_approve_{approval_id}
+        self._attr_unique_id = f"{DOMAIN}_approve_{approval_id}"
+        
+        # Get approval details for friendly name
+        approval = coord.get_pending_approval(approval_id)
+        if approval:
+            self._attr_name = f"SimpleChores Approve {approval.title} ({approval.kid_id.capitalize()})"
+        else:
+            self._attr_name = f"SimpleChores Approve {approval_id}"
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        try:
+            await self._hass.services.async_call(
+                DOMAIN, "approve_chore",
+                {"approval_id": self._approval_id}
+            )
+            _LOGGER.info("SimpleChores: Approved chore %s", self._approval_id)
+        except Exception as e:
+            _LOGGER.error(f"SimpleChores: Failed to approve chore {self._approval_id}: {e}")
+
+    @property
+    def available(self) -> bool:
+        """Check if approval button should be available."""
+        if self._coord.model is None:
+            return False
+        approval = self._coord.get_pending_approval(self._approval_id)
+        return approval is not None
+
+
+class SimpleChoresRejectButton(ButtonEntity):
+    """Button to reject a specific chore."""
+    _attr_icon = "mdi:close-circle"
+
+    def __init__(self, coord: SimpleChoresCoordinator, approval_id: str, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._approval_id = approval_id
+        # Use consistent naming pattern: simplechores_reject_{approval_id}
+        self._attr_unique_id = f"{DOMAIN}_reject_{approval_id}"
+        
+        # Get approval details for friendly name
+        approval = coord.get_pending_approval(approval_id)
+        if approval:
+            self._attr_name = f"SimpleChores Reject {approval.title} ({approval.kid_id.capitalize()})"
+        else:
+            self._attr_name = f"SimpleChores Reject {approval_id}"
+
+    async def async_press(self) -> None:
+        """Handle the button press."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        try:
+            await self._hass.services.async_call(
+                DOMAIN, "reject_chore",
+                {"approval_id": self._approval_id, "reason": "Rejected via dashboard"}
+            )
+            _LOGGER.info("SimpleChores: Rejected chore %s", self._approval_id)
+        except Exception as e:
+            _LOGGER.error(f"SimpleChores: Failed to reject chore {self._approval_id}: {e}")
+
+    @property
+    def available(self) -> bool:
+        """Check if rejection button should be available."""
+        if self._coord.model is None:
+            return False
+        approval = self._coord.get_pending_approval(self._approval_id)
+        return approval is not None
+
 
 class SimpleChoresResetRejectedButton(ButtonEntity):
     _attr_icon = "mdi:restore"

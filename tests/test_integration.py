@@ -190,7 +190,7 @@ class TestSimpleChoresIntegration:
             await service_handler(call_data)
 
             mock_coordinator.ensure_kid.assert_called_with("alice")
-            mock_coordinator.create_pending_chore.assert_called_with("alice", "Clean garage", 20)
+            mock_coordinator.create_pending_chore.assert_called_with("alice", "Clean garage", 20, None)
             # Should also try to call todo service
             mock_hass.services.async_call.assert_called()
 
