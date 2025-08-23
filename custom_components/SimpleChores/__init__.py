@@ -121,11 +121,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             title = data["title"]
             points = int(data["points"])
             kid = data["kid"]
+            chore_type = data.get("chore_type")
             
             await coordinator.ensure_kid(kid)
 
             # Create pending chore to track points
-            todo_uid = await coordinator.create_pending_chore(kid, title, points)
+            todo_uid = await coordinator.create_pending_chore(kid, title, points, chore_type)
             _LOGGER.debug("Created pending chore %s for %s", todo_uid, kid)
 
             # Try to create todo item if todo entities are available
@@ -253,16 +254,43 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 if not reward:
                     raise HomeAssistantError(f"Reward not found: {reward_id}")
 
-                kid_points = coordinator.get_points(kid)
-                if kid_points < reward.cost:
-                    raise HomeAssistantError(f"Insufficient points: {kid} has {kid_points}, need {reward.cost}")
+                # Check reward type and handle accordingly
+                progress = coordinator.get_reward_progress(kid, reward_id)
+                
+                if reward.is_point_based():
+                    # Traditional point-spending reward
+                    if reward.cost is None:
+                        raise HomeAssistantError(f"Point-based reward {reward_id} has no cost defined")
+                    
+                    kid_points = coordinator.get_points(kid)
+                    if kid_points < reward.cost:
+                        raise HomeAssistantError(f"Insufficient points: {kid} has {kid_points}, need {reward.cost}")
 
-                await coordinator.remove_points(kid, reward.cost, f"Reward: {reward.title}", "spend")
-                _LOGGER.info("Successfully claimed reward '%s' for %s (%d points)", 
-                           reward.title, kid, reward.cost)
+                    await coordinator.remove_points(kid, reward.cost, f"Reward: {reward.title}", "spend")
+                    _LOGGER.info("Successfully claimed point reward '%s' for %s (%d points)", 
+                               reward.title, kid, reward.cost)
 
-                # Create calendar event if enabled
-                if reward.create_calendar_event:
+                elif reward.is_completion_based() or reward.is_streak_based():
+                    # Progress-based reward
+                    if not progress or not progress.completed:
+                        # Show current progress
+                        if progress:
+                            if reward.is_completion_based():
+                                progress_msg = f"{progress.current_completions}/{reward.required_completions} completions"
+                            else:
+                                progress_msg = f"{progress.current_streak}/{reward.required_streak_days} day streak"
+                            raise HomeAssistantError(f"Reward not yet achieved. Progress: {progress_msg}")
+                        else:
+                            raise HomeAssistantError(f"No progress found for reward {reward.title}")
+                    
+                    # Reward already achieved - trigger celebration
+                    _LOGGER.info("Celebrating already achieved reward '%s' for %s", reward.title, kid)
+                    
+                else:
+                    raise HomeAssistantError(f"Reward {reward_id} has no valid requirements defined")
+
+                # Create calendar event if enabled and reward is available/achieved
+                if reward.create_calendar_event and (reward.is_point_based() or (progress and progress.completed)):
                     parents_calendar = entry.data.get("parents_calendar", "calendar.parents")
                     start_time = datetime.now()
                     end_time = start_time + timedelta(hours=reward.calendar_duration_hours)
@@ -281,7 +309,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         )
                         _LOGGER.info("Created calendar event for reward: %s", reward.title)
                     except ServiceNotFound:
-                        _LOGGER.warning("Calendar service not available - reward claimed but no calendar event created")
+                        _LOGGER.warning("Calendar service not available - reward processed but no calendar event created")
                     except Exception as ex:
                         _LOGGER.error("Failed to create calendar event for reward: %s", ex)
                         # Don't fail the whole service - points already deducted
@@ -366,7 +394,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 raise HomeAssistantError("day_of_week is required for weekly chores")
 
             await coordinator.ensure_kid(kid)
-            chore_id = await coordinator.create_recurring_chore(kid, title, points, schedule_type, day_of_week)
+            chore_type = data.get("chore_type")
+            chore_id = await coordinator.create_recurring_chore(kid, title, points, schedule_type, day_of_week, chore_type)
 
             _LOGGER.info("Created recurring chore %s: %s for %s (%s)", 
                         chore_id, title, kid, schedule_type)
@@ -463,6 +492,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Required("kid"): cv.string,
         vol.Required("title"): cv.string,
         vol.Required("points"): cv.positive_int,
+        vol.Optional("chore_type"): cv.string,
         vol.Optional("due"): cv.datetime,
     })
 
@@ -495,6 +525,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         vol.Required("points"): cv.positive_int,
         vol.Required("schedule_type"): vol.In(["daily", "weekly"]),
         vol.Optional("day_of_week"): vol.In([0, 1, 2, 3, 4, 5, 6]),  # 0=Monday, 6=Sunday
+        vol.Optional("chore_type"): cv.string,
     })
 
     approve_chore_schema = vol.Schema({

@@ -35,33 +35,38 @@ class TestSimpleChoresWeekSensor:
                 kid_id="alice", 
                 delta=5, 
                 reason="Chore completed",
-                ts=monday_this_week.timestamp()
+                ts=monday_this_week.timestamp(),
+                kind="earn"
             ),
             LedgerEntry(
                 kid_id="alice",
                 delta=3,
                 reason="Bonus points", 
-                ts=(monday_this_week + timedelta(days=2)).timestamp()
+                ts=(monday_this_week + timedelta(days=2)).timestamp(),
+                kind="earn"
             ),
             LedgerEntry(
                 kid_id="bob",
                 delta=4,
                 reason="Bob's chore",
-                ts=(monday_this_week + timedelta(days=1)).timestamp()
+                ts=(monday_this_week + timedelta(days=1)).timestamp(),
+                kind="earn"
             ),
             # Last week entries (should not count)
             LedgerEntry(
                 kid_id="alice",
                 delta=10,
                 reason="Last week chore",
-                ts=last_week.timestamp()
+                ts=last_week.timestamp(),
+                kind="earn"
             ),
             # Negative entry (spending)
             LedgerEntry(
                 kid_id="alice",
                 delta=-2,
                 reason="Reward claimed",
-                ts=(monday_this_week + timedelta(days=3)).timestamp()
+                ts=(monday_this_week + timedelta(days=3)).timestamp(),
+                kind="spend"
             )
         ]
         return coordinator
@@ -171,19 +176,19 @@ class TestSimpleChoresTotalSensor:
         """Coordinator with mixed positive and negative ledger entries."""
         coordinator.model.ledger = [
             # Positive entries (earnings)
-            LedgerEntry(kid_id="alice", delta=10, reason="Chore 1", ts=datetime.now().timestamp()),
-            LedgerEntry(kid_id="alice", delta=5, reason="Chore 2", ts=datetime.now().timestamp()),
-            LedgerEntry(kid_id="alice", delta=8, reason="Bonus", ts=datetime.now().timestamp()),
+            LedgerEntry(kid_id="alice", delta=10, reason="Chore 1", ts=datetime.now().timestamp(), kind="earn"),
+            LedgerEntry(kid_id="alice", delta=5, reason="Chore 2", ts=datetime.now().timestamp(), kind="earn"),
+            LedgerEntry(kid_id="alice", delta=8, reason="Bonus", ts=datetime.now().timestamp(), kind="earn"),
             
             # Negative entries (spending - should not count in total earned)
-            LedgerEntry(kid_id="alice", delta=-3, reason="Reward", ts=datetime.now().timestamp()),
-            LedgerEntry(kid_id="alice", delta=-5, reason="Another reward", ts=datetime.now().timestamp()),
+            LedgerEntry(kid_id="alice", delta=-3, reason="Reward", ts=datetime.now().timestamp(), kind="spend"),
+            LedgerEntry(kid_id="alice", delta=-5, reason="Another reward", ts=datetime.now().timestamp(), kind="spend"),
             
             # Other kid's entries (should not count)
-            LedgerEntry(kid_id="bob", delta=15, reason="Bob's chore", ts=datetime.now().timestamp()),
+            LedgerEntry(kid_id="bob", delta=15, reason="Bob's chore", ts=datetime.now().timestamp(), kind="earn"),
             
             # Zero entry (should not count)
-            LedgerEntry(kid_id="alice", delta=0, reason="Adjustment", ts=datetime.now().timestamp())
+            LedgerEntry(kid_id="alice", delta=0, reason="Adjustment", ts=datetime.now().timestamp(), kind="adjust")
         ]
         return coordinator
     
@@ -211,8 +216,8 @@ class TestSimpleChoresTotalSensor:
     def test_native_value_only_negative_entries(self, coordinator):
         """Test total when kid only has negative entries."""
         coordinator.model.ledger = [
-            LedgerEntry(kid_id="alice", delta=-5, reason="Reward 1", ts=datetime.now().timestamp()),
-            LedgerEntry(kid_id="alice", delta=-3, reason="Reward 2", ts=datetime.now().timestamp())
+            LedgerEntry(kid_id="alice", delta=-5, reason="Reward 1", ts=datetime.now().timestamp(), kind="spend"),
+            LedgerEntry(kid_id="alice", delta=-3, reason="Reward 2", ts=datetime.now().timestamp(), kind="spend")
         ]
         
         sensor = SimpleChoresTotalSensor(coordinator, "alice")
