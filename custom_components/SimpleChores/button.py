@@ -31,6 +31,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     # Dynamic approval/rejection buttons - create discovery buttons for each kid
     for kid_id in kids:
         entities.append(SimpleChoresTodayApprovalButton(coordinator, kid_id, hass))
+
+    # Individual chore claim buttons - create a button for each pending chore
+    if hasattr(coordinator.model, 'pending_chores') and coordinator.model.pending_chores:
+        for todo_uid, chore in coordinator.model.pending_chores.items():
+            if chore.status == "pending":  # Only create buttons for pending chores
+                entities.append(SimpleChoresIndividualClaimButton(coordinator, todo_uid, hass))
+
+    # Fallback bulk claim button for each kid (for remaining chores after individual claims)
+    for kid_id in kids:
         entities.append(SimpleChoresTodayClaimButton(coordinator, kid_id, hass))
 
     # Dynamic approval button for parents (shows all pending approvals)
@@ -538,16 +547,17 @@ class SimpleChoresTodayClaimButton(ButtonEntity):
 
     @property
     def available(self) -> bool:
-        """Show button only when kid has pending chores that can be claimed."""
+        """Show button only when kid has multiple pending chores (fallback for bulk operations)."""
         if self._coord.model is None:
             return False
         
-        # Check if this kid has any pending chores
+        # Check if this kid has multiple pending chores
+        # Individual buttons handle single chores, this is for bulk claiming
         pending_chores = [
             chore for chore in self._coord.model.pending_chores.values() 
             if chore.kid_id == self._kid_id and chore.status == "pending"
         ]
-        return len(pending_chores) > 0
+        return len(pending_chores) > 1  # Only show for multiple chores
 
     @property
     def name(self) -> str:
@@ -560,10 +570,10 @@ class SimpleChoresTodayClaimButton(ButtonEntity):
             if chore.kid_id == self._kid_id and chore.status == "pending"
         ])
         
-        return f"SimpleChores Claim Chores ({self._kid_id.capitalize()}) - {pending_count} available"
+        return f"SimpleChores Claim ALL Chores ({self._kid_id.capitalize()}) - {pending_count} remaining"
 
     async def async_press(self) -> None:
-        """Claim the first available pending chore for this kid."""
+        """Claim ALL pending chores for this kid (bulk operation)."""
         import logging
         _LOGGER = logging.getLogger(__name__)
         
@@ -571,25 +581,99 @@ class SimpleChoresTodayClaimButton(ButtonEntity):
             _LOGGER.warning("No model available")
             return
             
-        # Find first pending chore for this kid
-        pending_chore = None
-        for chore in self._coord.model.pending_chores.values():
-            if chore.kid_id == self._kid_id and chore.status == "pending":
-                pending_chore = chore
-                break
+        # Find all pending chores for this kid
+        pending_chores = [
+            chore for chore in self._coord.model.pending_chores.values()
+            if chore.kid_id == self._kid_id and chore.status == "pending"
+        ]
                 
-        if not pending_chore:
+        if not pending_chores:
             _LOGGER.warning("No pending chores found for %s", self._kid_id)
+            return
+            
+        _LOGGER.info("Bulk claiming %d chores for %s", len(pending_chores), self._kid_id)
+        
+        claimed_count = 0
+        for chore in pending_chores:
+            try:
+                await self._hass.services.async_call(
+                    DOMAIN, "request_approval",
+                    {"todo_uid": chore.todo_uid}
+                )
+                claimed_count += 1
+                _LOGGER.info("Bulk claimed: %s for %s", chore.title, self._kid_id)
+            except Exception as e:
+                _LOGGER.error("Failed to claim chore %s for %s: %s", chore.title, self._kid_id, e)
+        
+        _LOGGER.info("Bulk claim complete: %d/%d chores claimed for %s", 
+                    claimed_count, len(pending_chores), self._kid_id)
+
+
+class SimpleChoresIndividualClaimButton(ButtonEntity):
+    """Individual button for claiming a specific chore."""
+    _attr_icon = "mdi:check-circle"
+
+    def __init__(self, coord: SimpleChoresCoordinator, todo_uid: str, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._todo_uid = todo_uid
+        self._attr_unique_id = f"{DOMAIN}_claim_chore_{todo_uid[:8]}"
+        
+        # Get chore details for friendly name
+        chore = coord.get_pending_chore(todo_uid)
+        if chore:
+            self._attr_name = f"SimpleChores Claim: {chore.title} (+{chore.points}pts)"
+        else:
+            self._attr_name = f"SimpleChores Claim Chore {todo_uid[:8]}"
+
+        # Register with coordinator for updates
+        if not hasattr(coord, '_individual_claim_buttons'):
+            coord._individual_claim_buttons = []
+        coord._individual_claim_buttons.append(self)
+
+    @property
+    def available(self) -> bool:
+        """Show button only when chore exists and is pending."""
+        if self._coord.model is None:
+            return False
+        
+        chore = self._coord.get_pending_chore(self._todo_uid)
+        return chore is not None and chore.status == "pending"
+
+    @property
+    def name(self) -> str:
+        """Dynamic name based on current chore state."""
+        if self._coord.model is None:
+            return self._attr_name
+            
+        chore = self._coord.get_pending_chore(self._todo_uid)
+        if chore:
+            return f"SimpleChores Claim: {chore.title} (+{chore.points}pts)"
+        else:
+            return f"SimpleChores Claim Chore {self._todo_uid[:8]} (Not Found)"
+
+    async def async_press(self) -> None:
+        """Claim this specific chore."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        chore = self._coord.get_pending_chore(self._todo_uid)
+        if not chore:
+            _LOGGER.warning("Cannot claim chore %s - not found", self._todo_uid)
+            return
+            
+        if chore.status != "pending":
+            _LOGGER.warning("Cannot claim chore %s - status is %s", self._todo_uid, chore.status)
             return
             
         try:
             await self._hass.services.async_call(
                 DOMAIN, "request_approval",
-                {"todo_uid": pending_chore.todo_uid}
+                {"todo_uid": self._todo_uid}
             )
-            _LOGGER.info("Claimed chore %s for %s", pending_chore.title, self._kid_id)
+            _LOGGER.info("Claimed specific chore: %s for %s", chore.title, chore.kid_id)
         except Exception as e:
-            _LOGGER.error("Failed to claim chore for %s: %s", self._kid_id, e)
+            _LOGGER.error("Failed to claim chore %s: %s", self._todo_uid, e)
 
 
 class SimpleChoresTodayApprovalButton(ButtonEntity):

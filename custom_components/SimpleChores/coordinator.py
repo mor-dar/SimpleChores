@@ -484,6 +484,11 @@ class SimpleChoresCoordinator:
             for button in self._claim_buttons:
                 button.async_write_ha_state()
                 
+        # Update individual claim buttons
+        if hasattr(self, '_individual_claim_buttons'):
+            for button in self._individual_claim_buttons:
+                button.async_write_ha_state()
+                
         # Update dynamic approval management buttons
         if hasattr(self, '_approval_manager_buttons'):
             for button in self._approval_manager_buttons:
