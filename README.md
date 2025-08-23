@@ -18,7 +18,7 @@ Each child gets a points balance, chores can be recurring or ad-hoc, and parents
   - To-do list integration: chores appear in kids’ To-do lists, checked off when done.
 
 - **Rewards system**  
-  Define rewards with a point cost. Claiming a reward deducts points and (optionally) creates a calendar event (“Movie night”, “Trip to park”).
+  Define rewards with point costs or completion/streak requirements. Traditional point-based rewards deduct points and create calendar events. New completion-based rewards track progress toward goals like "Take out trash 10 times" or "Make bed every day for 1 week".
 
 - **Parents’ chores**  
   Log parent chores into a shared calendar to show kids that chores are for everyone.
@@ -80,13 +80,27 @@ After installation, follow the config flow to:
 ### Sensors
 - `sensor.simplechores_<kid>_points_week` – points earned this week
 - `sensor.simplechores_<kid>_points_total` – total points earned all-time
+- `sensor.simplechores_<reward_id>_progress_<kid>` – progress toward completion-based rewards
 
-### Dashboard Helpers
-- `text.simplechores_chore_title_input` – chore title input
+### Buttons
+- `button.simplechores_create_chore_button` – create ad-hoc chore action
+- `button.simplechores_create_recurring_button` – create recurring chore action
+- `button.simplechores_generate_daily_button` – generate today's recurring chores
+- `button.simplechores_<reward_id>_reward_<kid>` – reward claim buttons per kid
+- `button.simplechores_approve_<approval_id>` – approve pending chores
+- `button.simplechores_reject_<approval_id>` – reject pending chores
+- `button.simplechores_approval_status_button` – show pending approvals count
+- `button.simplechores_reset_rejected_button` – reset rejected chores to pending
+
+### Text Input Helpers
+- `text.simplechores_chore_title_input` – chore title input (starts empty)
 - `text.simplechores_chore_points_input` – points value input
 - `text.simplechores_chore_kid_input` – kid selection input
-- `button.simplechores_create_chore_button` – create chore action
-- `button.simplechores_reward_*` – reward claim buttons per kid
+- `text.simplechores_recurring_title_input` – recurring chore title
+- `text.simplechores_recurring_points_input` – recurring chore points
+- `text.simplechores_recurring_kid_input` – recurring chore kid selection
+- `text.simplechores_recurring_schedule_input` – schedule type (daily/weekly)
+- `text.simplechores_recurring_day_input` – day of week for weekly chores
 
 ---
 
@@ -106,7 +120,26 @@ All services are under the `simplechores` domain:
   - `kid`: child  
   - `title`: string  
   - `points`: integer  
+  - `chore_type`: string (optional) - for reward progress tracking
   - `due`: datetime (optional)
+
+- `simplechores.create_recurring_chore`
+  - `kid`: child
+  - `title`: string
+  - `points`: integer
+  - `schedule_type`: "daily" or "weekly"
+  - `day_of_week`: integer (0-6, required for weekly)
+  - `chore_type`: string (optional) - for reward progress tracking
+
+- `simplechores.generate_recurring_chores`
+  - `schedule_type`: "daily" or "weekly" (optional)
+
+- `simplechores.approve_chore`
+  - `approval_id`: pending approval ID
+
+- `simplechores.reject_chore`
+  - `approval_id`: pending approval ID
+  - `reason`: string (optional)
 
 - `simplechores.complete_chore`
   - `kid`: child  
@@ -177,14 +210,21 @@ entities:
 type: entities
 title: "Rewards - Alice"
 entities:
-  - entity: button.simplechores_alice_reward_movie_night
+  # Point-based rewards
+  - entity: button.simplechores_movie_night_reward_alice
     name: "Movie Night (20 pts)"
-  - entity: button.simplechores_alice_reward_extra_allowance  
+  - entity: button.simplechores_extra_allowance_reward_alice  
     name: "Extra Allowance (25 pts)"
-  - entity: button.simplechores_alice_reward_park_trip
-    name: "Park Trip (30 pts)"
-  - entity: button.simplechores_alice_reward_ice_cream
-    name: "Ice Cream (15 pts)"
+  # Completion-based rewards with progress
+  - entity: sensor.simplechores_trash_master_progress_alice
+    name: "Trash Master Progress"
+  - entity: button.simplechores_trash_master_reward_alice
+    name: "Trash Master Badge"
+  # Streak-based rewards with progress  
+  - entity: sensor.simplechores_bed_streak_progress_alice
+    name: "Perfect Week Progress"
+  - entity: button.simplechores_bed_streak_reward_alice
+    name: "Perfect Week - Bed Made"
 ```
 
 ## 🎯 Button Mode Workflows
@@ -204,9 +244,10 @@ When `use_todo: false`, SimpleChores operates in Button Mode with these workflow
 # Via automation/service
 service: simplechores.create_adhoc_chore
 data:
-  kid_id: "alice"
+  kid: "alice"
   title: "Clean bedroom"
   points: 10
+  chore_type: "room"  # Optional: for reward progress tracking
 ```
 
 #### 2. Completing & Approving Chores
@@ -238,14 +279,16 @@ automation:
     action:
       - service: simplechores.create_adhoc_chore
         data:
-          kid_id: "alice"
+          kid: "alice"
           title: "Make bed"
           points: 5
+          chore_type: "bed"  # Tracks toward bed-making rewards
       - service: simplechores.create_adhoc_chore
         data:
-          kid_id: "alice"  
+          kid: "alice"  
           title: "Brush teeth"
           points: 2
+          chore_type: "hygiene"
 ```
 
 **Auto-approve low-point chores:**
@@ -292,14 +335,16 @@ automation:
     action:
       - service: simplechores.create_adhoc_chore
         data:
-          kid_id: "{{ ['alice', 'bob'] | random }}"
+          kid: "{{ ['alice', 'bob'] | random }}"
           title: "Take out trash"
           points: 8
+          chore_type: "trash"  # Tracks toward trash master reward
       - service: simplechores.create_adhoc_chore
         data:
-          kid_id: "{{ ['alice', 'bob'] | random }}"
+          kid: "{{ ['alice', 'bob'] | random }}"
           title: "Load dishwasher"
           points: 6
+          chore_type: "dishes"  # Tracks toward dish hero reward
 ```
 
 **Conditional point bonuses:**
@@ -317,8 +362,8 @@ automation:
     action:
       service: simplechores.add_points
       data:
-        kid_id: "{{ trigger.event.data.kid_id }}"
-        points: 2
+        kid: "{{ trigger.event.data.kid_id }}"
+        amount: 2
         reason: "Weekend bonus"
 ```
 
@@ -333,16 +378,108 @@ sensor:
       alice_pending_approvals:
         friendly_name: "Alice Pending Approvals"
         value_template: >
-          {{ states | selectattr('entity_id', 'match', 'button.simplechores_alice_approve_.*') | list | count }}
+          {{ states | selectattr('entity_id', 'match', 'button.simplechores_approve_.*') | list | count }}
+
+# Use the built-in approval status button
+button.simplechores_approval_status_button  # Shows count in name, press to list all pending
 ```
 
 **Reset rejected chores:**
 ```yaml
-# Service to reset rejected chores back to pending
-service: simplechores.reset_rejected_chores
+# Use the built-in reset button or service
+button.simplechores_reset_rejected_button  # Resets all rejected chores to pending
+
+# Or programmatically approve individual chores
+service: simplechores.approve_chore
 data:
-  kid_id: "alice"
+  approval_id: "specific-approval-id"
 ```
+
+---
+
+## 🎁 Rewards System
+
+SimpleChores supports multiple reward types to motivate kids with different goal structures:
+
+### Point-Based Rewards (Traditional)
+Classic rewards that cost points and optionally create calendar events:
+```yaml
+# Default point-based rewards
+- Family Movie Night: 20 points
+- Extra $5 Allowance: 25 points  
+```
+
+### Completion-Based Rewards  
+Rewards earned by completing specific chore types a certain number of times:
+```yaml
+# Example completion-based rewards
+- Trash Master Badge: Complete 10 trash chores
+- Dish Washing Hero: Complete 15 dish chores
+```
+
+### Streak-Based Rewards
+Rewards earned by completing chore types on consecutive days:
+```yaml
+# Example streak-based rewards  
+- Perfect Week - Bed Made: Make bed every day for 7 days
+- Super Clean Streak: Clean room every day for 14 days
+```
+
+### Reward Progress Tracking
+- Progress sensors: `sensor.simplechores_<reward_id>_progress_<kid>`
+- Automatic progress updates when chores with matching `chore_type` are completed
+- Visual progress tracking in dashboards
+- Achievement notifications via Home Assistant events
+
+### Chore Types for Reward Tracking
+When creating chores, use the `chore_type` parameter to track progress:
+```yaml
+# Common chore types that match default rewards
+- "trash" → Trash Master Badge
+- "bed" → Perfect Week - Bed Made  
+- "dishes" → Dish Washing Hero
+- "room" → Super Clean Streak
+```
+
+---
+
+## 🔄 Migration Guide
+
+### Upgrading from v1.3.x to v1.4.x
+
+**Entity Naming Changes:**
+The button entity naming pattern changed in v1.4.1 for auto-entities compatibility:
+
+```yaml
+# OLD pattern (v1.3.x and earlier):
+button.simplechores_reward_movie_night_alice
+
+# NEW pattern (v1.4.0+):
+button.simplechores_movie_night_reward_alice
+```
+
+**Dashboard Updates Required:**
+If you use auto-entities cards, update your filters:
+
+```yaml
+# OLD auto-entities filter:
+include:
+  - entity_id: "button.simplechores_reward_*_alice"
+
+# NEW auto-entities filter:  
+include:
+  - entity_id: "button.simplechores_*_reward_alice"
+```
+
+**New Entities Added:**
+- Approval/rejection buttons: `button.simplechores_approve_*`, `button.simplechores_reject_*`
+- Progress sensors for completion/streak rewards: `sensor.simplechores_*_progress_*`
+- Additional management buttons: `button.simplechores_approval_status_button`
+
+**Breaking Changes:**
+- Text input entities now start empty instead of with placeholder text
+- Reward buttons may have different availability logic for completion-based rewards
+- Service calls now include optional `chore_type` parameter
 
 ---
 
@@ -414,13 +551,16 @@ Scaffold created with [cookiecutter-homeassistant-custom-component](https://gith
 ## 🚀 Roadmap / TODO
 
 - [x] **Weekly/monthly summary sensors** – ✅ Implemented (`sensor.<kid>_points_week`, `sensor.<kid>_points_total`)
-- [x] **Rewards system** – ✅ Implemented with default rewards and calendar integration
+- [x] **Rewards system** – ✅ Implemented with point-based, completion-based, and streak-based rewards
 - [x] **Dashboard input helpers** – ✅ Implemented with text inputs and action buttons
+- [x] **Advanced rewards** – ✅ Implemented (completion tracking, streaks, progress sensors)
+- [x] **Approval/rejection workflow** – ✅ Implemented with dedicated buttons and status tracking
+- [x] **Button functionality fixes** – ✅ Fixed entity naming, validation, and error handling (v1.4.1)
 - [ ] **Config UI for rewards** (currently uses default rewards, could add config flow step)
 - [ ] **Ledger dashboard** (history of points earned/spent with reasons)
 - [ ] **Mobile-friendly dashboard pack** (Mushroom UI optional)
 - [ ] **Import tool** for KidsChores users
-- [ ] **Advanced rewards** (badges, streaks, achievements – optional add-on)
+- [ ] **Custom reward definitions** via UI (currently requires code changes)
 
 ---
 
