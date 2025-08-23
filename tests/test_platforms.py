@@ -212,7 +212,7 @@ class TestSimpleChoresText:
         assert entity._coord == mock_coordinator
         assert entity._attr_unique_id == f"{DOMAIN}_chore_title_input"
         assert entity._attr_name == "SimpleChores Chore Title"
-        assert entity._attr_native_value == "Enter chore name"
+        assert entity._attr_native_value == ""
         assert entity._attr_icon == "mdi:text"
         assert entity._attr_native_min == 1
         assert entity._attr_native_max == 100
@@ -221,7 +221,7 @@ class TestSimpleChoresText:
     def test_chore_title_native_value(self, mock_coordinator):
         """Test chore title native value."""
         entity = SimpleChoresChoreTitle(mock_coordinator)
-        assert entity.native_value == "Enter chore name"
+        assert entity.native_value == ""
 
     @pytest.mark.asyncio
     async def test_chore_title_set_value(self, mock_coordinator):
@@ -291,6 +291,7 @@ class TestSimpleChoresButton:
             Reward(id="movie", title="Movie Night", cost=20),
             Reward(id="ice_cream", title="Ice Cream", cost=15)
         ])
+        mock_coordinator.get_pending_approvals = Mock(return_value=[])
         mock_hass.data = {DOMAIN: {"test_entry": mock_coordinator}}
 
         await button_setup(mock_hass, mock_entry, add_entities)

@@ -463,6 +463,12 @@ class SimpleChoresCoordinator:
         """Get all pending approval requests"""
         return [a for a in self.model.pending_approvals.values() if a.status == "pending_approval"]
 
+    def get_pending_approval(self, approval_id: str):
+        """Get a specific pending approval by ID"""
+        if not self.model:
+            return None
+        return self.model.pending_approvals.get(approval_id)
+
     # ---- persistent todo items ----
     async def save_todo_item(self, uid: str, summary: str, status: str, kid_id: str, skip_save: bool = False) -> None:
         """Save a todo item to persistent storage"""

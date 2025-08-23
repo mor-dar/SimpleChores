@@ -40,7 +40,7 @@ class SimpleChoresChoreTitle(TextEntity):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_chore_title_input"
         self._attr_name = "SimpleChores Chore Title"
-        self._attr_native_value = "Enter chore name"
+        self._attr_native_value = ""  # Start empty
 
     @property
     def native_value(self) -> str:
