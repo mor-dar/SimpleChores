@@ -1,0 +1,121 @@
+title: SimpleChores Dashboard
+path: simplechores
+icon: mdi:clipboard-check
+cards:
+  # Kids Points Section
+  - type: vertical-stack
+    title: Points Balance
+    cards:
+      - type: entities
+        title: Current Points
+        entities:
+          - entity: number.simplechores_lior_points
+            name: "Lior Points"
+          - entity: number.simplechores_noam_points
+            name: "Noam Points"
+
+      - type: entities
+        title: Weekly & Total Points
+        entities:
+          - entity: sensor.simplechores_lior_points_week
+            name: "Lior This Week"
+          - entity: sensor.simplechores_lior_points_total
+            name: "Lior Total Earned"
+          - entity: sensor.simplechores_noam_points_week
+            name: "Noam This Week"
+          - entity: sensor.simplechores_noam_points_total
+            name: "Noam Total Earned"
+
+  # Chore Creation Section
+  - type: vertical-stack
+    title: Create Chores
+    cards:
+      - type: entities
+        title: Chore Inputs
+        entities:
+          - entity: text.simplechores_chore_title_input
+            name: "Chore Title"
+          - entity: text.simplechores_chore_points_input
+            name: "Points"
+          - entity: text.simplechores_chore_kid_input
+            name: "Kid"
+
+      - type: entities
+        title: Chore Actions
+        entities:
+          - entity: button.simplechores_create_chore
+            name: "Create Chore"
+            tap_action:
+              action: call-service
+              service: button.press
+              target:
+                entity_id: button.simplechores_create_chore
+
+  # Recurring Chores Section
+  - type: vertical-stack
+    title: Recurring Chores
+    cards:
+      - type: entities
+        title: Recurring Inputs
+        entities:
+          - entity: text.simplechores_recurring_title_input
+            name: "Title"
+          - entity: text.simplechores_recurring_points_input
+            name: "Points"
+          - entity: text.simplechores_recurring_kid_input
+            name: "Kid"
+          - entity: text.simplechores_recurring_schedule_input
+            name: "Schedule (daily/weekly)"
+          - entity: text.simplechores_recurring_day_input
+            name: "Day (0=Mon...6=Sun)"
+
+      - type: entities
+        title: Recurring Actions
+        entities:
+          - entity: button.simplechores_create_recurring
+            name: "Create Recurring Chore"
+          - entity: button.generate_today_s_chores
+            name: "Generate Today's Chores"
+
+  # Approvals Section
+  - type: vertical-stack
+    title: Pending Approvals
+    cards:
+      - type: entities
+        entities:
+          - entity: sensor.simplechores_pending_approvals
+            name: "Pending Approvals Count"
+          - entity: button.simplechores_pending_approvals
+            name: "Show Pending Approvals"
+          - entity: button.simplechores_reset_rejected
+            name: "Reset Rejected Chores"
+
+  # Rewards Section
+  - type: vertical-stack
+    title: Rewards
+    cards:
+      # Lior Rewards
+      - type: entities
+        title: Lior Rewards
+        entities:
+          - entity: button.simplechores_reward_movie_night_lior
+            name: "Movie Night (20pts)"
+          - entity: button.simplechores_reward_extra_allowance_lior
+            name: "Extra Allowance (25pts)"
+          - entity: button.simplechores_reward_park_trip_lior
+            name: "Park Trip (30pts)"
+          - entity: button.simplechores_reward_ice_cream_lior
+            name: "Ice Cream (15pts)"
+
+      # Noam Rewards
+      - type: entities
+        title: Noam Rewards
+        entities:
+          - entity: button.simplechores_reward_movie_night_noam
+            name: "Movie Night (20pts)"
+          - entity: button.simplechores_reward_extra_allowance_noam
+            name: "Extra Allowance (25pts)"
+          - entity: button.simplechores_reward_park_trip_noam
+            name: "Park Trip (30pts)"
+          - entity: button.simplechores_reward_ice_cream_noam
+            name: "Ice Cream (15pts)"

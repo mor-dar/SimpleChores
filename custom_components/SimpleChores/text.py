@@ -39,7 +39,7 @@ class SimpleChoresChoreTitle(TextEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_chore_title_input"
-        self._attr_name = "Chore Title"
+        self._attr_name = "SimpleChores Chore Title"
         self._attr_native_value = "Enter chore name"
 
     @property
@@ -58,7 +58,7 @@ class SimpleChoresChorePoints(TextEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_chore_points_input"
-        self._attr_name = "Chore Points"
+        self._attr_name = "SimpleChores Chore Points"
         self._attr_native_value = "5"
 
     @property
@@ -77,7 +77,7 @@ class SimpleChoresChoreKid(TextEntity):
         self._coord = coord
         self._kids = kids
         self._attr_unique_id = f"{DOMAIN}_chore_kid_input"
-        self._attr_name = "Kid"
+        self._attr_name = "SimpleChores Kid"
         self._attr_native_value = kids[0] if kids else "noam"
 
     @property
@@ -100,7 +100,7 @@ class SimpleChoresRecurringTitle(TextEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_recurring_title_input"
-        self._attr_name = "Recurring Chore Title"
+        self._attr_name = "SimpleChores Recurring Chore Title"
         self._attr_native_value = "Brush teeth"
 
     @property
@@ -119,7 +119,7 @@ class SimpleChoresRecurringPoints(TextEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_recurring_points_input"
-        self._attr_name = "Recurring Chore Points"
+        self._attr_name = "SimpleChores Recurring Chore Points"
         self._attr_native_value = "2"
 
     @property
@@ -138,7 +138,7 @@ class SimpleChoresRecurringKid(TextEntity):
         self._coord = coord
         self._kids = kids
         self._attr_unique_id = f"{DOMAIN}_recurring_kid_input"
-        self._attr_name = "Recurring Chore Kid"
+        self._attr_name = "SimpleChores Recurring Chore Kid"
         self._attr_native_value = kids[0] if kids else "noam"
 
     @property
@@ -157,7 +157,7 @@ class SimpleChoresRecurringSchedule(TextEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_recurring_schedule_input"
-        self._attr_name = "Schedule Type"
+        self._attr_name = "SimpleChores Schedule Type"
         self._attr_native_value = "daily"
 
     @property
@@ -177,7 +177,7 @@ class SimpleChoresRecurringDay(TextEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_recurring_day_input"
-        self._attr_name = "Day of Week (0=Mon, 6=Sun)"
+        self._attr_name = "SimpleChores Day of Week (0=Mon, 6=Sun)"
         self._attr_native_value = "0"
 
     @property

@@ -32,7 +32,7 @@ class SimpleChoresWeekSensor(SensorEntity):
         self._coord = coord
         self._kid_id = kid_id
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points_week"
-        self._attr_name = f"{kid_id.capitalize()} Points (This Week)"
+        self._attr_name = f"SimpleChores {kid_id.capitalize()} Points (This Week)"
 
     @property
     def native_value(self):
@@ -53,7 +53,7 @@ class SimpleChoresTotalSensor(SensorEntity):
         self._coord = coord
         self._kid_id = kid_id
         self._attr_unique_id = f"{DOMAIN}_{kid_id}_points_total"
-        self._attr_name = f"{kid_id.capitalize()} Points (Total Earned)"
+        self._attr_name = f"SimpleChores {kid_id.capitalize()} Points (Total Earned)"
         self._attr_icon = "mdi:star-circle-outline"
 
     @property
@@ -73,7 +73,7 @@ class SimpleChoresPendingApprovalsSensor(SensorEntity):
     def __init__(self, coord: SimpleChoresCoordinator):
         self._coord = coord
         self._attr_unique_id = f"{DOMAIN}_pending_approvals"
-        self._attr_name = "Pending Chore Approvals"
+        self._attr_name = "SimpleChores Pending Chore Approvals"
         self._attr_icon = "mdi:clipboard-check-multiple"
         # Store reference in coordinator for updates
         if not hasattr(coord, '_approval_sensors'):

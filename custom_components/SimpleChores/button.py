@@ -47,7 +47,7 @@ class SimpleChoresCreateChoreButton(ButtonEntity):
         self._coord = coord
         self._hass = hass
         self._attr_unique_id = f"{DOMAIN}_create_chore_button"
-        self._attr_name = "Create Chore"
+        self._attr_name = "SimpleChores Create Chore"
 
     async def async_press(self) -> None:
         import logging
@@ -120,9 +120,9 @@ class SimpleChoresRewardButton(ButtonEntity):
         reward = coord.get_reward(reward_id)
         self._attr_unique_id = f"{DOMAIN}_reward_{reward_id}_{kid_id}"
         if reward:
-            self._attr_name = f"{reward.title} ({kid_id.capitalize()}) - {reward.cost}pts"
+            self._attr_name = f"SimpleChores {reward.title} ({kid_id.capitalize()}) - {reward.cost}pts"
         else:
-            self._attr_name = f"Unknown Reward ({kid_id.capitalize()})"
+            self._attr_name = f"SimpleChores Unknown Reward ({kid_id.capitalize()})"
 
     @property
     def available(self) -> bool:
@@ -152,7 +152,7 @@ class SimpleChoresCreateRecurringButton(ButtonEntity):
         self._coord = coord
         self._hass = hass
         self._attr_unique_id = f"{DOMAIN}_create_recurring_button"
-        self._attr_name = "Create Recurring Chore"
+        self._attr_name = "SimpleChores Create Recurring Chore"
 
     async def async_press(self) -> None:
         import logging
@@ -240,7 +240,7 @@ class SimpleChoresGenerateDailyButton(ButtonEntity):
         self._coord = coord
         self._hass = hass
         self._attr_unique_id = f"{DOMAIN}_generate_daily_button"
-        self._attr_name = "Generate Today's Chores"
+        self._attr_name = "SimpleChores Generate Today's Chores"
 
     async def async_press(self) -> None:
         import logging
@@ -264,7 +264,7 @@ class SimpleChoresApprovalStatusButton(ButtonEntity):
         self._coord = coord
         self._hass = hass
         self._attr_unique_id = f"{DOMAIN}_approval_status_button"
-        self._attr_name = "Show Pending Approvals"
+        self._attr_name = "SimpleChores Show Pending Approvals"
         # Store reference in coordinator for updates
         if not hasattr(coord, '_approval_buttons'):
             coord._approval_buttons = []
@@ -277,8 +277,8 @@ class SimpleChoresApprovalStatusButton(ButtonEntity):
             import logging
             _LOGGER = logging.getLogger(__name__)
             _LOGGER.debug(f"SimpleChores: Approval button name check - pending count: {pending_count}")
-            return f"Pending Approvals ({pending_count})"
-        return "Pending Approvals (0)"
+            return f"SimpleChores Pending Approvals ({pending_count})"
+        return "SimpleChores Pending Approvals (0)"
 
     @property
     def available(self) -> bool:
@@ -309,7 +309,7 @@ class SimpleChoresResetRejectedButton(ButtonEntity):
         self._coord = coord
         self._hass = hass
         self._attr_unique_id = f"{DOMAIN}_reset_rejected_button"
-        self._attr_name = "Reset Rejected Chores"
+        self._attr_name = "SimpleChores Reset Rejected Chores"
 
     async def async_press(self) -> None:
         import logging

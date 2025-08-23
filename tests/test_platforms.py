@@ -160,7 +160,7 @@ class TestSimpleChoresWeekSensor:
         assert sensor._coord == mock_coordinator_with_ledger
         assert sensor._kid_id == "alice"
         assert sensor._attr_unique_id == f"{DOMAIN}_alice_points_week"
-        assert sensor._attr_name == "Alice Points (This Week)"
+        assert sensor._attr_name == "SimpleChores Alice Points (This Week)"
 
     def test_week_sensor_native_value(self, mock_coordinator_with_ledger):
         """Test week sensor native value calculation."""
@@ -211,7 +211,7 @@ class TestSimpleChoresText:
 
         assert entity._coord == mock_coordinator
         assert entity._attr_unique_id == f"{DOMAIN}_chore_title_input"
-        assert entity._attr_name == "Chore Title"
+        assert entity._attr_name == "SimpleChores Chore Title"
         assert entity._attr_native_value == "Enter chore name"
         assert entity._attr_icon == "mdi:text"
         assert entity._attr_native_min == 1
@@ -274,7 +274,7 @@ class TestSimpleChoresButton:
         assert button._coord == mock_coordinator
         assert button._hass == mock_hass
         assert button._attr_unique_id == f"{DOMAIN}_create_chore_button"
-        assert button._attr_name == "Create Chore"
+        assert button._attr_name == "SimpleChores Create Chore"
         assert button._attr_icon == "mdi:plus-circle"
 
     @pytest.mark.asyncio
