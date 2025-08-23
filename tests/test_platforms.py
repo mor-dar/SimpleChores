@@ -302,6 +302,7 @@ class TestSimpleChoresButton:
         add_entities.assert_called_once()
         entities = add_entities.call_args[0][0]
         # Should include: create chore, create recurring, generate daily, approval status,
-        # reset rejected, plus 2 rewards × 2 kids = 4 reward buttons = 9 total
-        assert len(entities) == 9
+        # claim buttons (2), approval buttons (2), approval manager, reset rejected,
+        # plus 2 rewards × 2 kids = 4 reward buttons = 14 total
+        assert len(entities) == 14
 
