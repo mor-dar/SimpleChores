@@ -28,17 +28,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, add_entitie
     # Approval status button
     entities.append(SimpleChoresApprovalStatusButton(coordinator, hass))
 
-    # Individual approval/rejection buttons for each pending approval
-    pending_approvals = coordinator.get_pending_approvals()
-    for approval in pending_approvals:
-        entities.append(SimpleChoresApproveButton(coordinator, approval.id, hass))
-        entities.append(SimpleChoresRejectButton(coordinator, approval.id, hass))
+    # Dynamic approval/rejection buttons - create discovery buttons for each kid
+    for kid_id in kids:
+        entities.append(SimpleChoresTodayApprovalButton(coordinator, kid_id, hass))
+        entities.append(SimpleChoresTodayClaimButton(coordinator, kid_id, hass))
 
-    # Claim buttons for pending chores (kids use these to request approval)
-    if hasattr(coordinator.model, 'pending_chores') and coordinator.model.pending_chores:
-        for todo_uid, chore in coordinator.model.pending_chores.items():
-            if chore.status == "pending":  # Only show claim buttons for pending chores
-                entities.append(SimpleChoresClaimButton(coordinator, todo_uid, hass))
+    # Dynamic approval button for parents (shows all pending approvals)
+    entities.append(SimpleChoresApprovalManagerButton(coordinator, hass))
 
     # Reset rejected chores button
     entities.append(SimpleChoresResetRejectedButton(coordinator, hass))
@@ -522,3 +518,226 @@ class SimpleChoresResetRejectedButton(ButtonEntity):
         await self._coord.async_save()
 
         _LOGGER.info(f"SimpleChores: Reset {reset_count} rejected chores and removed {len(rejected_approvals)} rejected approvals")
+
+
+class SimpleChoresTodayClaimButton(ButtonEntity):
+    """Dynamic button for kids to claim their pending chores for approval."""
+    _attr_icon = "mdi:hand-heart"
+
+    def __init__(self, coord: SimpleChoresCoordinator, kid_id: str, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._kid_id = kid_id
+        self._attr_unique_id = f"{DOMAIN}_claim_chores_{kid_id}"
+        self._attr_name = f"SimpleChores Claim Chores ({kid_id.capitalize()})"
+        
+        # Register with coordinator for updates
+        if not hasattr(coord, '_claim_buttons'):
+            coord._claim_buttons = []
+        coord._claim_buttons.append(self)
+
+    @property
+    def available(self) -> bool:
+        """Show button only when kid has pending chores that can be claimed."""
+        if self._coord.model is None:
+            return False
+        
+        # Check if this kid has any pending chores
+        pending_chores = [
+            chore for chore in self._coord.model.pending_chores.values() 
+            if chore.kid_id == self._kid_id and chore.status == "pending"
+        ]
+        return len(pending_chores) > 0
+
+    @property
+    def name(self) -> str:
+        """Show count of pending chores in button name."""
+        if self._coord.model is None:
+            return f"SimpleChores Claim Chores ({self._kid_id.capitalize()})"
+            
+        pending_count = len([
+            chore for chore in self._coord.model.pending_chores.values() 
+            if chore.kid_id == self._kid_id and chore.status == "pending"
+        ])
+        
+        return f"SimpleChores Claim Chores ({self._kid_id.capitalize()}) - {pending_count} available"
+
+    async def async_press(self) -> None:
+        """Claim the first available pending chore for this kid."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        if self._coord.model is None:
+            _LOGGER.warning("No model available")
+            return
+            
+        # Find first pending chore for this kid
+        pending_chore = None
+        for chore in self._coord.model.pending_chores.values():
+            if chore.kid_id == self._kid_id and chore.status == "pending":
+                pending_chore = chore
+                break
+                
+        if not pending_chore:
+            _LOGGER.warning("No pending chores found for %s", self._kid_id)
+            return
+            
+        try:
+            await self._hass.services.async_call(
+                DOMAIN, "request_approval",
+                {"todo_uid": pending_chore.todo_uid}
+            )
+            _LOGGER.info("Claimed chore %s for %s", pending_chore.title, self._kid_id)
+        except Exception as e:
+            _LOGGER.error("Failed to claim chore for %s: %s", self._kid_id, e)
+
+
+class SimpleChoresTodayApprovalButton(ButtonEntity):
+    """Dynamic button for parents to approve/reject chores for a specific kid."""
+    _attr_icon = "mdi:clipboard-check"
+
+    def __init__(self, coord: SimpleChoresCoordinator, kid_id: str, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._kid_id = kid_id
+        self._attr_unique_id = f"{DOMAIN}_approve_chores_{kid_id}"
+        self._attr_name = f"SimpleChores Manage Approvals ({kid_id.capitalize()})"
+        
+        # Register with coordinator for updates
+        if not hasattr(coord, '_approval_manager_buttons'):
+            coord._approval_manager_buttons = []
+        coord._approval_manager_buttons.append(self)
+
+    @property
+    def available(self) -> bool:
+        """Show button only when kid has pending approvals."""
+        if self._coord.model is None:
+            return False
+        
+        # Check if this kid has any pending approvals
+        pending_approvals = [
+            approval for approval in self._coord.model.pending_approvals.values() 
+            if approval.kid_id == self._kid_id and approval.status == "pending_approval"
+        ]
+        return len(pending_approvals) > 0
+
+    @property  
+    def name(self) -> str:
+        """Show count of pending approvals in button name."""
+        if self._coord.model is None:
+            return f"SimpleChores Manage Approvals ({self._kid_id.capitalize()})"
+            
+        pending_count = len([
+            approval for approval in self._coord.model.pending_approvals.values() 
+            if approval.kid_id == self._kid_id and approval.status == "pending_approval"
+        ])
+        
+        return f"SimpleChores Manage Approvals ({self._kid_id.capitalize()}) - {pending_count} pending"
+
+    async def async_press(self) -> None:
+        """Log all pending approvals for this kid with approve/reject instructions."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        if self._coord.model is None:
+            _LOGGER.warning("No model available")
+            return
+            
+        # Find all pending approvals for this kid
+        pending_approvals = [
+            approval for approval in self._coord.model.pending_approvals.values() 
+            if approval.kid_id == self._kid_id and approval.status == "pending_approval"
+        ]
+        
+        if not pending_approvals:
+            _LOGGER.warning("No pending approvals found for %s", self._kid_id)
+            return
+            
+        _LOGGER.info("=== PENDING APPROVALS FOR %s ===", self._kid_id.upper())
+        for approval in pending_approvals:
+            _LOGGER.info("📋 %s - %d points", approval.title, approval.points)
+            _LOGGER.info("   ✅ Approve: simplechores.approve_chore - approval_id: %s", approval.id)
+            _LOGGER.info("   ❌ Reject:  simplechores.reject_chore - approval_id: %s", approval.id)
+            _LOGGER.info("")
+
+
+class SimpleChoresApprovalManagerButton(ButtonEntity):
+    """Unified button for managing all pending approvals across all kids."""
+    _attr_icon = "mdi:account-supervisor"
+
+    def __init__(self, coord: SimpleChoresCoordinator, hass: HomeAssistant):
+        self._coord = coord
+        self._hass = hass
+        self._attr_unique_id = f"{DOMAIN}_approval_manager"
+        self._attr_name = "SimpleChores Approval Manager"
+        
+        # Register with coordinator for updates  
+        if not hasattr(coord, '_approval_manager_buttons'):
+            coord._approval_manager_buttons = []
+        coord._approval_manager_buttons.append(self)
+
+    @property
+    def available(self) -> bool:
+        """Show button only when there are any pending approvals."""
+        if self._coord.model is None:
+            return False
+        
+        pending_approvals = [
+            approval for approval in self._coord.model.pending_approvals.values() 
+            if approval.status == "pending_approval"
+        ]
+        return len(pending_approvals) > 0
+
+    @property  
+    def name(self) -> str:
+        """Show total count of pending approvals."""
+        if self._coord.model is None:
+            return "SimpleChores Approval Manager"
+            
+        pending_count = len([
+            approval for approval in self._coord.model.pending_approvals.values() 
+            if approval.status == "pending_approval"
+        ])
+        
+        if pending_count == 0:
+            return "SimpleChores Approval Manager"
+        else:
+            return f"SimpleChores Approval Manager - {pending_count} total pending"
+
+    async def async_press(self) -> None:
+        """Show all pending approvals with bulk management options."""
+        import logging
+        _LOGGER = logging.getLogger(__name__)
+        
+        if self._coord.model is None:
+            _LOGGER.warning("No model available")
+            return
+            
+        # Find all pending approvals
+        pending_approvals = [
+            approval for approval in self._coord.model.pending_approvals.values() 
+            if approval.status == "pending_approval"
+        ]
+        
+        if not pending_approvals:
+            _LOGGER.info("🎉 No pending approvals - all caught up!")
+            return
+            
+        _LOGGER.info("=== ALL PENDING APPROVALS ===")
+        
+        # Group by kid for better organization
+        by_kid = {}
+        for approval in pending_approvals:
+            if approval.kid_id not in by_kid:
+                by_kid[approval.kid_id] = []
+            by_kid[approval.kid_id].append(approval)
+            
+        for kid_id, approvals in by_kid.items():
+            _LOGGER.info("👦 %s (%d pending):", kid_id.upper(), len(approvals))
+            for approval in approvals:
+                _LOGGER.info("  📋 %s - %d points [ID: %s]", approval.title, approval.points, approval.id)
+            _LOGGER.info("")
+            
+        _LOGGER.info("💡 Use individual kid approval buttons or call services directly:")
+        _LOGGER.info("   ✅ simplechores.approve_chore")  
+        _LOGGER.info("   ❌ simplechores.reject_chore")
