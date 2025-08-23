@@ -87,8 +87,9 @@ After installation, follow the config flow to:
 - `button.simplechores_create_recurring_button` – create recurring chore action
 - `button.simplechores_generate_daily_button` – generate today's recurring chores
 - `button.simplechores_<reward_id>_reward_<kid>` – reward claim buttons per kid
-- `button.simplechores_approve_<approval_id>` – approve pending chores
-- `button.simplechores_reject_<approval_id>` – reject pending chores
+- `button.simplechores_claim_<todo_uid>` – claim chore completion buttons for kids
+- `button.simplechores_approve_<approval_id>` – approve pending chores (parents)
+- `button.simplechores_reject_<approval_id>` – reject pending chores (parents)
 - `button.simplechores_approval_status_button` – show pending approvals count
 - `button.simplechores_reset_rejected_button` – reset rejected chores to pending
 
@@ -140,6 +141,9 @@ All services are under the `simplechores` domain:
 - `simplechores.reject_chore`
   - `approval_id`: pending approval ID
   - `reason`: string (optional)
+
+- `simplechores.request_approval`
+  - `todo_uid`: pending chore ID for kids to claim completion
 
 - `simplechores.complete_chore`
   - `kid`: child  
@@ -227,6 +231,25 @@ entities:
     name: "Perfect Week - Bed Made"
 ```
 
+## 🎯 Chore Approval Workflow
+
+### Complete Workflow Steps
+
+SimpleChores provides a complete approval workflow for family chore management:
+
+```
+1. Parent creates chore → Creates pending chore entry
+2. Kid sees claim button → "Claim Clean Room (Alice) - 10pts"  
+3. Kid presses claim → Moves chore to approval status
+4. Parent sees approve/reject buttons → "Approve Clean Room (Alice)" / "Reject Clean Room (Alice)"
+5. Parent approves → Points awarded, all buttons disappear
+```
+
+**Dashboard Experience:**
+- **Kids see**: Claim buttons with clear chore titles and point values
+- **Parents see**: Approve/reject buttons only after kids claim completion
+- **Everyone sees**: Real-time workflow status updates
+
 ## 🎯 Button Mode Workflows
 
 ### Working Without Todo Lists
@@ -250,21 +273,27 @@ data:
   chore_type: "room"  # Optional: for reward progress tracking
 ```
 
-#### 2. Completing & Approving Chores
+#### 2. Claiming & Approving Chores
 ```yaml
-# Direct service completion (bypasses todo workflow)
-service: simplechores.complete_chore
+# Kid claims chore completion (requests approval)
+service: simplechores.request_approval
 data:
-  chore_id: "unique-chore-id"
+  todo_uid: "chore-uuid"
 
-# Manual approval from dashboard
-# Click the dynamically generated approval button:
-# "Approve: Clean bedroom (Alice, 10pts)"
+# Or kid clicks claim button: "Claim Clean bedroom (Alice) - 10pts"
 
-# Service-based approval
+# Parent approves from dashboard
+# Click approve button: "Approve Clean bedroom (Alice)"
+
+# Or service-based approval
 service: simplechores.approve_chore
 data:
   approval_id: "approval-uuid"
+
+# Direct completion (bypasses approval workflow)
+service: simplechores.complete_chore
+data:
+  chore_id: "unique-chore-id"
 ```
 
 #### 3. Automation Examples
@@ -554,7 +583,8 @@ Scaffold created with [cookiecutter-homeassistant-custom-component](https://gith
 - [x] **Rewards system** – ✅ Implemented with point-based, completion-based, and streak-based rewards
 - [x] **Dashboard input helpers** – ✅ Implemented with text inputs and action buttons
 - [x] **Advanced rewards** – ✅ Implemented (completion tracking, streaks, progress sensors)
-- [x] **Approval/rejection workflow** – ✅ Implemented with dedicated buttons and status tracking
+- [x] **Approval/rejection workflow** – ✅ Implemented with complete claim → approve → points workflow
+- [x] **Claim buttons for kids** – ✅ Implemented manual chore completion claiming (v1.4.2)
 - [x] **Button functionality fixes** – ✅ Fixed entity naming, validation, and error handling (v1.4.1)
 - [ ] **Config UI for rewards** (currently uses default rewards, could add config flow step)
 - [ ] **Ledger dashboard** (history of points earned/spent with reasons)
