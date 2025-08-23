@@ -22,6 +22,7 @@ class SimpleChoresCoordinator:
         self.hass = hass
         self.store = SimpleChoresStore(hass)
         self.model: StorageModel | None = None
+        self._add_entities_callback: callable | None = None
 
     async def async_init(self) -> None:
         """Initialize the coordinator by loading data."""
@@ -29,6 +30,10 @@ class SimpleChoresCoordinator:
         # Add default rewards if none exist
         if not self.model.rewards:
             await self._add_default_rewards()
+
+    def set_add_entities_callback(self, callback: callable) -> None:
+        """Set callback for dynamically adding new entities."""
+        self._add_entities_callback = callback
 
     async def async_save(self) -> None:
         """Save the model data."""
@@ -409,6 +414,8 @@ class SimpleChoresCoordinator:
             # Update approval buttons (with error handling for tests)
             try:
                 await self._update_approval_buttons()
+                # Try to add new approve/reject buttons dynamically
+                await self._create_dynamic_approval_buttons(approval_id)
             except Exception:
                 # Ignore entity update errors in test environments
                 pass
@@ -471,6 +478,24 @@ class SimpleChoresCoordinator:
 
             return True
         return False
+
+    async def _create_dynamic_approval_buttons(self, approval_id: str) -> None:
+        """Create new approve/reject buttons for a new approval."""
+        if self._add_entities_callback:
+            try:
+                # Import here to avoid circular imports
+                from .button import SimpleChoresApproveButton, SimpleChoresRejectButton
+                
+                new_entities = [
+                    SimpleChoresApproveButton(self, approval_id, self.hass),
+                    SimpleChoresRejectButton(self, approval_id, self.hass)
+                ]
+                
+                # Call the callback to add new entities
+                self._add_entities_callback(new_entities, True)
+                _LOGGER.info("Created dynamic approve/reject buttons for approval %s", approval_id)
+            except Exception as ex:
+                _LOGGER.warning("Failed to create dynamic approval buttons for %s: %s", approval_id, ex)
 
     async def _update_approval_buttons(self):
         """Trigger updates for all dynamic buttons and sensors"""
